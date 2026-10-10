@@ -14,8 +14,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY src ./src
 
-RUN useradd --create-home dixon && chown -R dixon /app
-USER dixon
+# The node image already has user "node" (uid 1000), which is also the uid Hugging Face runs as.
+RUN mkdir -p /app/.cache && chown -R node:node /app
+USER node
 
 EXPOSE 8787
 ENTRYPOINT ["dumb-init", "--"]

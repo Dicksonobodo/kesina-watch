@@ -8,7 +8,8 @@
     "server": "npm --prefix server run dev",
     "server:install": "npm --prefix server install",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tunnel": "npx --yes cloudflared tunnel --no-autoupdate --url http://localhost:8787"
   },
   "dependencies": {
     "@sentry/react": "^11.6.0",
