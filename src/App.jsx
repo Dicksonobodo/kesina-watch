@@ -13,6 +13,7 @@ import { Splash } from "@/components/layout/Splash";
 const page = (load, name) => lazy(() => load().then((m) => ({ default: m[name] })));
 const AuthPage = page(() => import("@/features/auth/AuthPage"), "AuthPage");
 const HomePage = page(() => import("@/features/home/HomePage"), "HomePage");
+const BrowsePage = page(() => import("@/features/browse/BrowsePage"), "BrowsePage");
 const LivePage = page(() => import("@/features/live/LivePage"), "LivePage");
 const SportsPage = page(() => import("@/features/sports/SportsPage"), "SportsPage");
 const LibraryPage = page(() => import("@/features/library/LibraryPage"), "LibraryPage");
@@ -36,6 +37,7 @@ export default function App() {
                       <Route path="share" element={<SharePage />} />
                       <Route element={<AppShell />}>
                         <Route index element={<HomePage />} />
+                        <Route path="browse" element={<BrowsePage />} />
                         <Route path="live" element={<LivePage />} />
                         <Route path="sports" element={<SportsPage />} />
                         <Route path="library" element={<LibraryPage />} />

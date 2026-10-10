@@ -75,6 +75,14 @@ Downloads run **in the user's browser** (`src/features/downloads/engine/`):
 - Controls: seek bar with buffered range and hover time, ±10s, volume, speed, quality, picture-in-picture, full screen.
 - Keys: `space`/`k` play, `←`/`→` (`j`/`l`) 10s, `↑`/`↓` volume, `m` mute, `f` full screen, `p` PiP, `Esc` close. On touch screens: tap toggles controls, double-tap the sides to skip 10s.
 
+## Browse: movie sites without the ads
+
+**Browse** (`/browse`): type a movie website and Dixon Watch shows its movies as a clean poster grid, with the site's menu, search and *Load more*. Tap a poster to watch or download it in a panel over the grid. Nothing from the site runs on the visitor's device, so there are no ads, pop-ups or fake buttons.
+
+- Server: `POST /browse { url }` (`server/src/browse.js`). Reads the page (plain HTML first, headless Chrome with ads blocked for script-built pages), finds the repeated "movie card" markup (link + poster), skips tag/genre/people pages and icon tiles, and returns cards plus next/previous page, the site's search template and its menu. Results cached 10 minutes; identical requests share one read; 120 pages per user per 10 minutes.
+- Detection also finds "Download" links and relative player paths whose address carries a video extension anywhere (common redirect scripts like `/movie.php?id=…&type=.mp4`).
+- Pinned movie sites open in Browse; live channels open in Live.
+
 ## Live, Sports, Admin & Premium
 
 - **Live** (`/live`): paste a concert / programme / channel page or a direct `.m3u8` link; the stream starts playing automatically. Pinned live channels sit below it.

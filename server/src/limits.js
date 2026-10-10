@@ -10,6 +10,24 @@ setInterval(() => {
   for (const [key, times] of hits) if (!times.some((t) => now - t < WINDOW_MS)) hits.delete(key);
 }, 60_000).unref();
 
+/** Per-user request budget over 10 minutes (Premium gets 3×). */
+export function createRateLimit(max, message = "You're going a bit fast. Take a short break and try again in a few minutes.") {
+  const bucket = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, times] of bucket) if (!times.some((t) => now - t < WINDOW_MS)) bucket.delete(key);
+  }, 60_000).unref();
+  return (req, res, next) => {
+    const key = req.uid || req.ip;
+    const now = Date.now();
+    const recent = (bucket.get(key) || []).filter((t) => now - t < WINDOW_MS);
+    if (recent.length >= max * (req.premium ? 3 : 1)) return res.status(429).json({ error: message });
+    recent.push(now);
+    bucket.set(key, recent);
+    next();
+  };
+}
+
 export function rateLimit(req, res, next) {
   const key = req.uid || req.ip;
   const now = Date.now();

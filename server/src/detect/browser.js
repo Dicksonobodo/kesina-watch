@@ -51,15 +51,14 @@ async function getBrowser() {
 }
 
 /**
- * Opens the page in headless Chrome with ads blocked and records every video request.
- * Returns { html, title, candidates, adsBlocked, popupsBlocked, finalUrl }.
+ * Runs fn(page, stats) in a fresh, private Chrome tab with ads and trackers blocked,
+ * pop-ups killed and private addresses refused. The tab is always closed afterwards.
  */
-export function browserDetect(url) {
+function withShieldedPage(fn) {
   return runLimited(async () => {
     const [browser, blocker] = await Promise.all([getBrowser(), getBlocker().catch(() => null)]);
     const context = await browser.createBrowserContext();
     const stats = { adsBlocked: 0, popupsBlocked: 0 };
-    const candidates = new Map();
     const page = await context.newPage();
 
     // Kill every pop-up / new tab the page tries to open (registered after our own page exists).
@@ -97,40 +96,76 @@ export function browserDetect(url) {
         if (req.failure()?.errorText?.startsWith("net::ERR_BLOCKED_BY_CLIENT")) stats.adsBlocked++;
       });
 
-      page.on("response", (res) => {
-        const reqUrl = res.url();
-        const headers = res.headers();
-        const type = classify(reqUrl, headers["content-type"]);
-        if (!type || candidates.has(reqUrl)) return;
-        const total = Number(headers["content-range"]?.split("/")[1]) || Number(headers["content-length"]) || null;
-        candidates.set(reqUrl, {
-          url: reqUrl,
-          type,
-          size: type === "file" ? total : null,
-          referer: res.request().headers().referer || res.frame()?.url() || url,
-        });
-      });
-
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS }).catch((err) => {
-        if (!/timeout/i.test(err.message)) throw new HttpError(502, "That page wouldn't load. It may be down or blocking us.");
-      });
-
-      // Give players a moment, then nudge them to start.
-      await waitForMedia(candidates, 3_000);
-      if (!candidates.size) await nudgePlayers(page);
-      await waitForMedia(candidates, MEDIA_WAIT_MS);
-      if (candidates.size) await sleep(1_500); // let a master playlist arrive alongside variants
-
-      return {
-        html: await page.content().catch(() => ""),
-        title: await page.title().catch(() => ""),
-        finalUrl: page.url(),
-        candidates: [...candidates.values()],
-        ...stats,
-      };
+      return await fn(page, stats);
     } finally {
       await context.close().catch(() => {});
     }
+  });
+}
+
+async function open(page, url) {
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS }).catch((err) => {
+    if (!/timeout/i.test(err.message)) throw new HttpError(502, "That page wouldn't load. It may be down or blocking us.");
+  });
+}
+
+/**
+ * Opens the page with ads blocked and records every video request.
+ * Returns { html, title, candidates, adsBlocked, popupsBlocked, finalUrl }.
+ */
+export function browserDetect(url) {
+  return withShieldedPage(async (page, stats) => {
+    const candidates = new Map();
+    page.on("response", (res) => {
+      const reqUrl = res.url();
+      const headers = res.headers();
+      const type = classify(reqUrl, headers["content-type"]);
+      if (!type || candidates.has(reqUrl)) return;
+      const total = Number(headers["content-range"]?.split("/")[1]) || Number(headers["content-length"]) || null;
+      candidates.set(reqUrl, {
+        url: reqUrl,
+        type,
+        size: type === "file" ? total : null,
+        referer: res.request().headers().referer || res.frame()?.url() || url,
+      });
+    });
+
+    await open(page, url);
+
+    // Give players a moment, then nudge them to start.
+    await waitForMedia(candidates, 3_000);
+    if (!candidates.size) await nudgePlayers(page);
+    await waitForMedia(candidates, MEDIA_WAIT_MS);
+    if (candidates.size) await sleep(1_500); // let a master playlist arrive alongside variants
+
+    return {
+      html: await page.content().catch(() => ""),
+      title: await page.title().catch(() => ""),
+      finalUrl: page.url(),
+      candidates: [...candidates.values()],
+      ...stats,
+    };
+  });
+}
+
+/**
+ * Renders a listing page (home, category, search) with ads blocked, scrolling a little so
+ * lazy-loaded posters appear. Used by Browse when the plain HTML has no movie cards.
+ */
+export function renderPage(url) {
+  return withShieldedPage(async (page, stats) => {
+    await open(page, url);
+    await sleep(2_000);
+    for (let i = 0; i < 4; i++) {
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight * 1.5)).catch(() => {});
+      await sleep(500);
+    }
+    return {
+      html: await page.content().catch(() => ""),
+      title: await page.title().catch(() => ""),
+      finalUrl: page.url(),
+      ...stats,
+    };
   });
 }
 

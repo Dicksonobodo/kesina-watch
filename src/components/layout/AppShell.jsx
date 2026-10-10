@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
-import { Compass, Gauge, House, Library, Radio, ShieldCheck, Trophy, UserRound, WifiOff } from "lucide-react";
+import { Compass, Gauge, House, Library, Pin, Radio, ShieldCheck, Trophy, UserRound, WifiOff } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth, isFirebaseConfigured } from "@/features/auth/AuthProvider";
 import { useShield } from "@/features/shield/ShieldProvider";
@@ -16,11 +16,13 @@ import { onSyncProblem } from "@/lib/userData";
 
 const NAV = [
   { to: "/", label: "Home", icon: House, end: true },
+  { to: "/browse", label: "Browse", icon: Compass },
   { to: "/live", label: "Live", icon: Radio },
   { to: "/sports", label: "Sports", icon: Trophy },
   { to: "/library", label: "Library", icon: Library },
-  { to: "/sites", label: "Sites", icon: Compass, desktopOnly: true },
-  { to: "/profile", label: "Profile", icon: UserRound, mobileOnly: true },
+  { to: "/sites", label: "Pinned", icon: Pin, desktopOnly: true },
+  // On phones, Profile is the avatar in the top bar (the tab bar holds the five main sections).
+  { to: "/profile", label: "Profile", icon: UserRound, hidden: true },
 ];
 const ADMIN_NAV = { to: "/admin", label: "Admin", icon: Gauge };
 
@@ -43,7 +45,7 @@ export function AppShell() {
         </NavLink>
 
         <nav className="mt-10 space-y-1">
-          {[...NAV.filter((n) => !n.mobileOnly), ...(admin ? [ADMIN_NAV] : [])].map((item) => (
+          {[...NAV.filter((n) => !n.hidden), ...(admin ? [ADMIN_NAV] : [])].map((item) => (
             <SidebarLink key={item.to} {...item} />
           ))}
         </nav>
@@ -100,7 +102,7 @@ export function AppShell() {
 
       {/* Mobile tab bar */}
       <nav className="glass-strong fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 grid h-16 grid-cols-5 rounded-[22px] px-1.5 lg:hidden">
-        {NAV.filter((n) => !n.desktopOnly).map((item) => (
+        {NAV.filter((n) => !n.desktopOnly && !n.hidden).map((item) => (
           <TabLink key={item.to} {...item} />
         ))}
       </nav>

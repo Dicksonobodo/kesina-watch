@@ -13,6 +13,8 @@ import { relayHandler, relayStats, signRelayToken } from "./relay.js";
 import { clientLogHandler } from "./clientLog.js";
 import { HttpError } from "./safety.js";
 import { recordDetection, recordPresence, snapshot } from "./activity.js";
+import { browse } from "./browse.js";
+import { createRateLimit } from "./limits.js";
 import { billingConfig, startCheckout, verifyCheckout, webhookHandler } from "./billing.js";
 
 const app = express();
@@ -97,6 +99,20 @@ app.post("/detect", requireUser, rateLimit, async (req, res, next) => {
 
 // Streams a video file or stream piece for sources that block the browser (see relay.js).
 app.get("/relay", relayHandler);
+
+/* ---------- browse a movie site (clean poster grid, no ads) ---------- */
+
+const browseLimit = createRateLimit(120); // pages per user per 10 minutes
+app.post(
+  "/browse",
+  requireUser,
+  browseLimit,
+  wrap(async (req) => {
+    const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
+    if (!url || url.length > 2048) throw new HttpError(400, "Type a website address.");
+    return browse(url);
+  }),
+);
 
 /* ---------- premium ---------- */
 

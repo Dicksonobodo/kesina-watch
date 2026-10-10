@@ -11,12 +11,35 @@ export function extractMetadata(html, pageUrl) {
   const meta = (sel) => $(sel).attr("content")?.trim() || "";
   const ld = readJsonLd($);
 
+  // The first title that isn't just the site's own name (logos are often the page's <h1>).
+  const host = (() => {
+    try {
+      return new URL(pageUrl).hostname.replace(/^www\./, "").split(".")[0].toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+  const titleTag = $("title").text().trim();
+  const siteNames = [meta('meta[property="og:site_name"]'), titleTag.split(/s+[|–—]s+|s+-s+/).pop()]
+    .filter((n) => n && n !== titleTag)
+    .map((n) => n.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const isSiteName = (t) => {
+    const c = cleanTitle(t).toLowerCase();
+    const squashed = c.replace(/[^a-z0-9]/g, "");
+    const h = host.replace(/[^a-z0-9]/g, "");
+    return !c || siteNames.includes(squashed) || (h.length > 3 && (squashed.includes(h) || h.includes(squashed)));
+  };
   const rawTitle =
-    ld.name ||
-    meta('meta[property="og:title"]') ||
-    meta('meta[name="twitter:title"]') ||
-    $("h1").first().text().trim() ||
-    $("title").text().trim();
+    [
+      ld.name,
+      meta('meta[property="og:title"]'),
+      meta('meta[name="twitter:title"]'),
+      titleTag, // "Movie Name | Site": cleanTitle keeps the movie part
+      ...$("h1")
+        .slice(0, 3)
+        .map((_, h) => $(h).text().trim())
+        .get(),
+    ].find((t) => t && !isSiteName(t)) || $("title").text().trim();
 
   const poster = absolute(
     imageOf(ld.image) ||
@@ -92,8 +115,17 @@ function extractCandidates($, html, pageUrl, ld) {
   if (ld.contentUrl) add(ld.contentUrl);
 
   // Links buried in player config scripts, including JSON-escaped ones (https:\/\/...)
-  const text = html.replace(/\\\//g, "/");
+  const text = html.replace(/\\\//g, "/").replace(/\\u0026/gi, "&");
   for (const m of text.matchAll(MEDIA_URL_RE)) add(m[0]);
+
+  // Relative video paths in player settings, e.g. "path":"/movie.php?id=…&type=.mp4"
+  for (const m of text.matchAll(/["'](\/[^"'\s<>]{1,300}?\.(?:mp4|m3u8|webm|mkv|mov)\b[^"'\s<>]{0,200})["']/gi)) add(m[1]);
+
+  // "Download" style links whose address carries a video extension anywhere (often a redirect script).
+  $("a[href]").each((_, a) => {
+    const href = $(a).attr("href") || "";
+    if (/\.(mp4|m3u8|webm|mkv|mov)(\b|$)/i.test(href)) add(href);
+  });
 
   return [...found].filter((u) => !/\.(ts|m4s)(\?|$)/i.test(u));
 }

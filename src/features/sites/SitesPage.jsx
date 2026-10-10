@@ -75,8 +75,8 @@ export function SiteTile({ site, uid }) {
 
   function open() {
     putItem(uid, "sites", site.id, { lastVisited: Date.now() }).catch(() => {});
-    // Live channels open in the Live tab, movie pages on Home.
-    navigate(`${site.kind === "live" ? "/live" : "/"}?u=${encodeURIComponent(site.url)}`);
+    // Live channels open in the Live tab; movie sites open in Browse (poster grid, no ads).
+    navigate(site.kind === "live" ? `/live?u=${encodeURIComponent(site.url)}` : `/browse?site=${encodeURIComponent(site.url)}`);
   }
 
   return (
