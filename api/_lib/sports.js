@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+export const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
 const log = { warn: (msg, fields) => console.warn(JSON.stringify({ level: "warn", msg, ...fields, error: fields?.error?.message })) };
 
 /*
@@ -22,16 +22,10 @@ export const LEAGUES = [
   { id: "fifa.world", name: "World Cup", short: "World Cup" },
 ];
 
-const NEWS_FEEDS = [
-  { source: "BBC Sport", url: "https://feeds.bbci.co.uk/sport/football/rss.xml" },
-  { source: "Sky Sports", url: "https://www.skysports.com/rss/12040" },
-  { source: "ESPN", url: "https://www.espn.com/espn/rss/soccer/news" },
-];
-
 const cache = new Map(); // key → { at, ttl, value, pending }
 
 // Serves cached data; refreshes in the background when stale, and keeps the last good copy if a source fails.
-async function cached(key, ttlMs, load) {
+export async function cached(key, ttlMs, load) {
   const hit = cache.get(key);
   const fresh = hit && Date.now() - hit.at < hit.ttl;
   if (fresh) return hit.value;
@@ -53,7 +47,7 @@ async function cached(key, ttlMs, load) {
   return hit?.value ?? pending;
 }
 
-async function getJson(url) {
+export async function getJson(url) {
   const res = await fetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).hostname}`);
   return res.json();
@@ -80,6 +74,18 @@ function mapEvent(e, league) {
     };
   };
   const status = e.status?.type ?? {};
+  const homeId = c.competitors?.find((x) => x.homeAway === "home")?.team?.id;
+  // Goal scorers and red cards, shown under the score in the fixtures list.
+  const moments = (c.details ?? [])
+    .filter((d) => d.scoringPlay || d.redCard)
+    .map((d) => ({
+      kind: d.scoringPlay ? "goal" : "red",
+      side: d.team?.id === homeId ? "home" : "away",
+      player: d.athletesInvolved?.[0]?.shortName ?? d.athletesInvolved?.[0]?.displayName ?? "",
+      clock: d.clock?.displayValue ?? "",
+      penalty: Boolean(d.penaltyKick),
+      ownGoal: Boolean(d.ownGoal),
+    }));
   return {
     id: e.id,
     league: league.id,
@@ -94,6 +100,7 @@ function mapEvent(e, league) {
     // Official broadcasters (where to watch). ESPN lists them for the US market.
     broadcasters: [...new Set((c.broadcasts ?? []).flatMap((b) => b.names ?? []))].slice(0, 4),
     link: e.links?.find((l) => l.rel?.includes("summary"))?.href ?? null,
+    moments,
   };
 }
 
@@ -120,53 +127,3 @@ export async function getMatches({ day = 0, league } = {}) {
   return { date: date.toISOString().slice(0, 10), leagues: LEAGUES, matches, live: matches.filter((m) => m.state === "in").length };
 }
 
-/* ---------- news ---------- */
-
-function bigImage(url) {
-  if (!url) return null;
-  return url.replace(/\/standard\/\d+\//, "/standard/800/").replace(/\/(\d{3})x(\d{3})\//, "/768x432/");
-}
-
-async function readFeed(feed) {
-  const res = await fetch(feed.url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${feed.source}`);
-  const $ = cheerio.load(await res.text(), { xmlMode: true });
-  return $("item")
-    .map((_, el) => {
-      const item = $(el);
-      const image =
-        item.find("media\\:thumbnail").attr("url") ||
-        item.find("media\\:content").attr("url") ||
-        item.find("enclosure[type^='image']").attr("url") ||
-        null;
-      const link = item.find("link").text().trim();
-      return {
-        id: link,
-        title: item.find("title").text().trim(),
-        summary: item.find("description").text().replace(/<[^>]+>/g, "").trim().slice(0, 220),
-        link,
-        image: bigImage(image),
-        published: new Date(item.find("pubDate").text() || Date.now()).toISOString(),
-        source: feed.source,
-      };
-    })
-    .get()
-    .filter((n) => n.title && n.link.startsWith("http"));
-}
-
-export async function getNews() {
-  return cached("news", 10 * 60_000, async () => {
-    const results = await Promise.allSettled(NEWS_FEEDS.map(readFeed));
-    const items = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-    if (!items.length) throw new Error("all news feeds failed");
-    const seen = new Set();
-    const unique = items.filter((n) => {
-      const key = n.title.toLowerCase().slice(0, 60);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    unique.sort((a, b) => new Date(b.published) - new Date(a.published));
-    return { value: unique.slice(0, 40) };
-  });
-}

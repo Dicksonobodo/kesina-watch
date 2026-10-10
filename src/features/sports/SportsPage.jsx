@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CalendarPlus, ExternalLink, Newspaper, RefreshCw, Trophy, Tv } from "lucide-react";
+import { CalendarPlus, ChevronRight, Newspaper, RefreshCw, Trophy, Tv } from "lucide-react";
 import { LiveDot } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/cn";
 import { reportError } from "@/lib/monitoring";
+import { MatchCentre } from "./MatchCentre";
+import { BallIcon } from "@/components/ui/BallIcon";
 
 // Served by Vercel functions on the same site (api/sports/*), independent of the detection server.
 async function getJson(path) {
@@ -38,6 +40,7 @@ export function SportsPage() {
   const [news, setNews] = useState(null);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [open, setOpen] = useState(null); // match shown in the match centre
 
   // Matches: refresh every 30s while anything is live today, every 2 minutes otherwise.
   useEffect(() => {
@@ -136,7 +139,7 @@ export function SportsPage() {
             </h2>
             <div className="grid gap-3 md:grid-cols-2">
               {live.map((m) => (
-                <LiveCard key={m.id} match={m} />
+                <LiveCard key={m.id} match={m} onOpen={() => setOpen(m)} />
               ))}
             </div>
           </motion.section>
@@ -169,7 +172,7 @@ export function SportsPage() {
                 <p className="mb-2 pl-1 text-[13px] font-semibold text-mist-300">{name}</p>
                 <div className="divide-y divide-white/[.05] overflow-hidden rounded-2xl bg-white/[.025] ring-1 ring-white/[.06]">
                   {list.map((m) => (
-                    <MatchRow key={m.id} match={m} />
+                    <MatchRow key={m.id} match={m} onOpen={() => setOpen(m)} />
                   ))}
                 </div>
               </div>
@@ -200,6 +203,8 @@ export function SportsPage() {
           </div>
         )}
       </section>
+
+      <AnimatePresence>{open && <MatchCentre match={open} onClose={() => setOpen(null)} />}</AnimatePresence>
     </div>
   );
 }
@@ -253,10 +258,31 @@ function useFlash(value) {
   return flash;
 }
 
-function LiveCard({ match: m }) {
+// "Saka 23', Ødegaard 61' (pen)" with ball icons under a result; red cards too.
+function Moments({ match, side, className }) {
+  const list = (match.moments ?? []).filter((x) => x.side === side);
+  if (!list.length) return null;
+  return (
+    <p className={cn("truncate text-[11px] text-mist-500", className)}>
+      {list.map((x, i) => (
+        <span key={i}>
+          {i > 0 && ", "}
+          {x.kind === "red" ? <span className="mr-0.5 inline-block h-2.5 w-[7px] translate-y-px rounded-[1px] bg-live" /> : <BallIcon className="mr-1 size-3 -translate-y-px align-middle" />}
+          {x.player} {x.clock}
+          {x.penalty ? " (pen)" : x.ownGoal ? " (og)" : ""}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+function LiveCard({ match: m, onOpen }) {
   const flash = useFlash(`${m.home.score}-${m.away.score}`);
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-live/[.12] via-white/[.02] to-transparent p-5 ring-1 ring-live/25">
+    <button
+      onClick={onOpen}
+      className="relative w-full overflow-hidden rounded-3xl bg-gradient-to-br from-live/[.12] via-white/[.02] to-transparent p-5 text-left ring-1 ring-live/25 transition hover:ring-live/50"
+    >
       <div className="flex items-center justify-between text-[12px]">
         <span className="text-mist-300">{m.leagueName}</span>
         <span className="flex items-center gap-1.5 font-mono font-medium text-live">
@@ -266,44 +292,59 @@ function LiveCard({ match: m }) {
       <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <div className="flex min-w-0 flex-col items-center gap-2 text-center">
           <TeamLogo team={m.home} size="size-11" />
-          <span className="truncate text-sm font-semibold">{m.home.short}</span>
+          <span className="w-full truncate text-sm font-semibold">{m.home.short}</span>
+          <Moments match={m} side="home" className="w-full text-center" />
         </div>
         <motion.div
           animate={flash ? { scale: [1, 1.18, 1] } : {}}
           className={cn("rounded-2xl px-4 py-2 font-display text-3xl font-bold tabular-nums transition-colors", flash ? "bg-signal text-ink-950" : "bg-black/30")}
         >
-          {m.home.score ?? 0}<span className="mx-1.5 text-mist-500">–</span>{m.away.score ?? 0}
+          {m.home.score ?? 0}
+          <span className="mx-1.5 text-mist-500">–</span>
+          {m.away.score ?? 0}
         </motion.div>
         <div className="flex min-w-0 flex-col items-center gap-2 text-center">
           <TeamLogo team={m.away} size="size-11" />
-          <span className="truncate text-sm font-semibold">{m.away.short}</span>
+          <span className="w-full truncate text-sm font-semibold">{m.away.short}</span>
+          <Moments match={m} side="away" className="w-full text-center" />
         </div>
       </div>
-      <WhereToWatch match={m} className="mt-4 justify-center" />
-    </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <WhereToWatch match={m} />
+        <span className="ml-auto shrink-0 text-[12px] font-semibold text-mist-300">Line-ups & stats →</span>
+      </div>
+    </button>
   );
 }
 
-function MatchRow({ match: m }) {
+function MatchRow({ match: m, onOpen }) {
   const done = m.state === "post";
   const flash = useFlash(`${m.home.score}-${m.away.score}`);
   return (
-    <div className="grid grid-cols-[56px_1fr_auto] items-center gap-3 px-3 py-3 sm:grid-cols-[72px_1fr_auto] sm:px-4">
-      <div className="text-center font-mono text-[11px] leading-tight text-mist-500">
-        {done ? <span className="text-mist-300">FT</span> : m.state === "pre" ? kickoffTime(m.kickoff) : m.detail}
-      </div>
-      <div className="min-w-0 space-y-1.5">
-        {[m.home, m.away].map((t, i) => (
-          <div key={i} className="flex items-center gap-2.5">
-            <TeamLogo team={t} size="size-5" />
-            <span className={cn("min-w-0 flex-1 truncate text-sm", done && !t.winner ? "text-mist-500" : "font-medium")}>{t.name}</span>
-            {m.state !== "pre" && (
-              <span className={cn("w-6 text-right font-mono text-sm tabular-nums", flash && "text-signal", done && t.winner && "font-bold")}>{t.score}</span>
-            )}
-          </div>
-        ))}
-        {m.state === "pre" && <WhereToWatch match={m} compact />}
-      </div>
+    <div className="group grid grid-cols-[56px_1fr_auto] items-center gap-3 px-3 py-3 transition hover:bg-white/[.025] sm:grid-cols-[72px_1fr_auto] sm:px-4">
+      <button onClick={onOpen} className="contents text-left" aria-label={`${m.home.name} vs ${m.away.name}: match details`}>
+        <span className="text-center font-mono text-[11px] leading-tight text-mist-500">
+          {done ? <span className="text-mist-300">FT</span> : m.state === "pre" ? kickoffTime(m.kickoff) : <span className="text-live">{m.clock || m.detail}</span>}
+        </span>
+        <span className="min-w-0 space-y-1.5">
+          {[
+            { t: m.home, side: "home" },
+            { t: m.away, side: "away" },
+          ].map(({ t, side }) => (
+            <span key={side} className="block">
+              <span className="flex items-center gap-2.5">
+                <TeamLogo team={t} size="size-5" />
+                <span className={cn("min-w-0 flex-1 truncate text-sm", done && !t.winner ? "text-mist-500" : "font-medium")}>{t.name}</span>
+                {m.state !== "pre" && (
+                  <span className={cn("w-6 text-right font-mono text-sm tabular-nums", flash && "text-signal", done && t.winner && "font-bold")}>{t.score}</span>
+                )}
+              </span>
+              <Moments match={m} side={side} className="pl-7.5" />
+            </span>
+          ))}
+          {m.state === "pre" && <WhereToWatch match={m} compact />}
+        </span>
+      </button>
       <div className="flex items-center gap-1">
         {m.state === "pre" && (
           <button
@@ -315,18 +356,14 @@ function MatchRow({ match: m }) {
             <CalendarPlus className="size-4" />
           </button>
         )}
-        {m.link && (
-          <a
-            href={m.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="grid size-9 place-items-center rounded-full text-mist-500 transition hover:bg-white/[.06] hover:text-mist-100"
-            aria-label="Match centre"
-            title="Match centre"
-          >
-            <ExternalLink className="size-4" />
-          </a>
-        )}
+        <button
+          onClick={onOpen}
+          className="grid size-9 place-items-center rounded-full text-mist-500 transition group-hover:text-mist-100 hover:bg-white/[.06]"
+          aria-label="Match details"
+          title="Line-ups, stats & table"
+        >
+          <ChevronRight className="size-4" />
+        </button>
       </div>
     </div>
   );
@@ -348,6 +385,7 @@ function WhereToWatch({ match, compact, className }) {
 
 function NewsCard({ item, featured }) {
   const ago = timeAgo(item.published);
+  const [imgFailed, setImgFailed] = useState(false);
   return (
     <a
       href={item.link}
@@ -358,13 +396,18 @@ function NewsCard({ item, featured }) {
         featured && "sm:col-span-2 lg:col-span-2 lg:row-span-2",
       )}
     >
-      <div className={cn("relative overflow-hidden bg-ink-800", featured ? "aspect-[16/9]" : "aspect-[16/9]")}>
-        {item.image ? (
-          <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-full object-cover transition duration-500 group-hover:scale-105" />
+      <div className="relative aspect-[16/9] overflow-hidden bg-ink-800">
+        {item.image && !imgFailed ? (
+          <img
+            src={item.image}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setImgFailed(true)}
+            className="size-full object-cover transition duration-500 group-hover:scale-105"
+          />
         ) : (
-          <div className="grid size-full place-items-center">
-            <Newspaper className="size-8 text-mist-700" />
-          </div>
+          <NewsArt item={item} />
         )}
         <span className="absolute top-3 left-3 rounded-full bg-black/60 px-2.5 py-1 font-mono text-[10px] font-medium tracking-wide text-white uppercase backdrop-blur">
           {item.source}
@@ -376,6 +419,23 @@ function NewsCard({ item, featured }) {
         <p className="mt-2 font-mono text-[11px] text-mist-700">{ago}</p>
       </div>
     </a>
+  );
+}
+
+// When a story has no usable picture: a designed card in the source's colours, with the headline's first words.
+const SOURCE_TINT = { "BBC Sport": ["#ffd230", "#2a2a12"], "Sky Sports": ["#e10a1e", "#22070b"], ESPN: ["#d00", "#200608"] };
+
+function NewsArt({ item }) {
+  const [accent, deep] = SOURCE_TINT[item.source] ?? ["#c6ff3d", "#0f1a06"];
+  const words = item.title.split(" ").slice(0, 4).join(" ");
+  return (
+    <div
+      className="relative size-full"
+      style={{ background: `radial-gradient(120% 90% at 85% 10%, ${accent}55, transparent 60%), linear-gradient(160deg, ${deep}, #08080b)` }}
+    >
+      <Trophy className="absolute -right-4 -bottom-6 size-36 rotate-12 opacity-[.08]" style={{ color: accent }} />
+      <p className="absolute inset-x-5 bottom-5 font-display text-2xl leading-[1.05] font-extrabold tracking-tight text-white/90 uppercase">{words}</p>
+    </div>
   );
 }
 

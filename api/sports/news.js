@@ -1,4 +1,4 @@
-import { getNews } from "../_lib/sports.js";
+import { getNews } from "../_lib/news.js";
 
 // GET /api/sports/news — football headlines from official RSS feeds.
 export async function GET() {
