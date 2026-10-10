@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/cn";
 import { reportError } from "@/lib/monitoring";
 import { MatchCentre } from "./MatchCentre";
+import { LeagueLeaders } from "./LeagueLeaders";
 import { BallIcon } from "@/components/ui/BallIcon";
 
 // Served by Vercel functions on the same site (api/sports/*), independent of the detection server.
@@ -183,6 +184,8 @@ export function SportsPage() {
           Broadcasters shown are the official rights holders listed for the match (mostly US). Check your local broadcaster: in Nigeria that&apos;s usually DStv / SuperSport or Showmax.
         </p>
       </section>
+
+      <LeagueLeaders preferred={league === "all" ? "eng.1" : league} />
 
       {/* News */}
       <section className="mt-12">

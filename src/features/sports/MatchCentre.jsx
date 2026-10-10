@@ -6,6 +6,8 @@ import { LiveDot } from "@/components/ui/Badge";
 import { BallIcon } from "@/components/ui/BallIcon";
 import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/cn";
+import { HighlightPlayer, PlayerSheet, TeamSheet } from "./Sheets";
+import { Commentary, HeadToHead, Highlights, MatchNews, Performers } from "./MatchExtras";
 
 // Team colours for comparisons (validated for contrast and colour-blind separation on the dark surface).
 const HOME = "#6a9e0e";
@@ -13,16 +15,32 @@ const AWAY = "#8b6fe0";
 
 const TABS = [
   { id: "summary", label: "Summary" },
+  { id: "commentary", label: "Commentary" },
   { id: "lineups", label: "Line-ups" },
   { id: "stats", label: "Stats" },
+  { id: "h2h", label: "Head-to-head" },
   { id: "table", label: "Table" },
+  { id: "news", label: "News" },
 ];
+
+// Which tabs have something to show for this match.
+const HAS = {
+  commentary: (m) => m.commentary?.length,
+  lineups: (m) => m.lineups,
+  stats: (m) => m.stats?.length,
+  h2h: (m) => m.headToHead?.games?.length || m.form?.length,
+  table: (m) => m.table,
+  news: (m) => m.news?.length,
+};
 
 /** Full-screen match centre: score, timeline, formations on a pitch, stats and the league table. */
 export function MatchCentre({ match: base, onClose }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("summary");
+  const [player, setPlayer] = useState(null); // { id, name, jersey, matchStats }
+  const [teamId, setTeamId] = useState(null);
+  const [clip, setClip] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +80,8 @@ export function MatchCentre({ match: base, onClose }) {
 
   const m = data ?? { ...base, events: [], stats: [], lineups: null, table: null };
   const live = m.state === "in";
-  const tabs = TABS.filter((t) => (t.id === "lineups" ? m.lineups : t.id === "stats" ? m.stats?.length : t.id === "table" ? m.table : true));
+  const tabs = TABS.filter((t) => !HAS[t.id] || HAS[t.id](m));
+  const openPlayer = (p) => p?.id && setPlayer({ id: p.id, name: p.name, jersey: p.number ?? p.jersey, matchStats: p.stats });
 
   return createPortal(
     <motion.div className="fixed inset-0 z-[96] flex justify-center sm:items-center sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -90,7 +109,7 @@ export function MatchCentre({ match: base, onClose }) {
             </button>
           </div>
           <div className="relative mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <TeamHead team={m.home} />
+            <TeamHead team={m.home} onOpen={() => m.home.id && setTeamId(m.home.id)} />
             <div className="text-center">
               {m.state === "pre" ? (
                 <p className="font-display text-2xl font-bold">
@@ -108,7 +127,7 @@ export function MatchCentre({ match: base, onClose }) {
                 {live ? m.clock || m.detail : m.state === "post" ? "Full time" : new Date(m.kickoff).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
               </p>
             </div>
-            <TeamHead team={m.away} />
+            <TeamHead team={m.away} onOpen={() => m.away.id && setTeamId(m.away.id)} />
           </div>
           <Scorers events={m.events} />
           <div className="relative mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11.5px] text-mist-500">
@@ -158,10 +177,19 @@ export function MatchCentre({ match: base, onClose }) {
           {data && (
             <AnimatePresence mode="wait">
               <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-                {tab === "summary" && <Timeline match={m} />}
-                {tab === "lineups" && m.lineups && <Lineups match={m} />}
+                {tab === "summary" && (
+                  <div className="space-y-8">
+                    <Highlights clips={m.highlights} onPlay={setClip} />
+                    <Performers match={m} onOpenPlayer={openPlayer} />
+                    <Timeline match={m} />
+                  </div>
+                )}
+                {tab === "commentary" && <Commentary lines={m.commentary} />}
+                {tab === "lineups" && m.lineups && <Lineups match={m} onOpenPlayer={openPlayer} />}
                 {tab === "stats" && <Stats match={m} />}
+                {tab === "h2h" && <HeadToHead match={m} />}
                 {tab === "table" && m.table && <Table rows={m.table} />}
+                {tab === "news" && <MatchNews items={m.news} />}
               </motion.div>
             </AnimatePresence>
           )}
@@ -173,6 +201,31 @@ export function MatchCentre({ match: base, onClose }) {
           </p>
         )}
       </motion.div>
+
+      <AnimatePresence>
+        {teamId && (
+          <TeamSheet
+            key={teamId}
+            league={m.league}
+            id={teamId}
+            onClose={() => setTeamId(null)}
+            onOpenPlayer={(p) => setPlayer({ id: p.id, name: p.name, jersey: p.jersey })}
+          />
+        )}
+        {player && (
+          <PlayerSheet
+            key={player.id}
+            league={m.league}
+            {...player}
+            onClose={() => setPlayer(null)}
+            onOpenTeam={(id) => {
+              setPlayer(null);
+              setTeamId(id);
+            }}
+          />
+        )}
+        {clip && <HighlightPlayer key={clip.id} clip={clip} onClose={() => setClip(null)} />}
+      </AnimatePresence>
     </motion.div>,
     document.body,
   );
@@ -188,12 +241,12 @@ function Logo({ team, className }) {
   return <img src={team.logo} alt="" onError={() => setFailed(true)} className={cn("object-contain", className)} />;
 }
 
-function TeamHead({ team }) {
+function TeamHead({ team, onOpen }) {
   return (
-    <div className="flex min-w-0 flex-col items-center gap-2 text-center">
-      <Logo team={team} className="size-14 sm:size-16" />
-      <p className="w-full truncate text-sm font-semibold sm:text-base">{team.short || team.name}</p>
-    </div>
+    <button onClick={onOpen} className="group flex min-w-0 flex-col items-center gap-2 text-center" title={`${team.name}: fixtures, results, squad`}>
+      <Logo team={team} className="size-14 transition group-hover:scale-105 sm:size-16" />
+      <p className="w-full truncate text-sm font-semibold underline-offset-4 group-hover:underline sm:text-base">{team.short || team.name}</p>
+    </button>
   );
 }
 
@@ -313,7 +366,7 @@ function place(starters, half) {
   return placed;
 }
 
-function Lineups({ match }) {
+function Lineups({ match, onOpenPlayer }) {
   const { home, away } = match.lineups;
   const goals = new Map();
   for (const e of match.events) if (e.kind === "goal" && e.players[0]) goals.set(e.players[0], (goals.get(e.players[0]) ?? 0) + 1);
@@ -347,9 +400,15 @@ function Lineups({ match }) {
           </g>
         </svg>
         {[...place(away.starters, "away").map((p) => ({ ...p, team: "away" })), ...place(home.starters, "home").map((p) => ({ ...p, team: "home" }))].map((p) => (
-          <div key={`${p.team}-${p.number}-${p.name}`} className="absolute flex w-16 -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={{ left: `${p.x}%`, top: `${p.y}%` }}>
+          <button
+            key={`${p.team}-${p.number}-${p.name}`}
+            onClick={() => onOpenPlayer(p)}
+            title={`${p.name}: match stats & profile`}
+            className="group absolute flex w-16 -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+            style={{ left: `${p.x}%`, top: `${p.y}%` }}
+          >
             <span
-              className="relative grid size-7 place-items-center rounded-full font-mono text-[11px] font-bold text-white shadow-lg ring-2 ring-white/80 sm:size-8"
+              className="relative grid size-7 place-items-center rounded-full font-mono text-[11px] font-bold text-white shadow-lg ring-2 ring-white/80 transition group-hover:scale-110 group-hover:ring-white sm:size-8"
               style={{ background: p.team === "home" ? HOME : AWAY }}
             >
               {p.number}
@@ -367,7 +426,7 @@ function Lineups({ match }) {
             <span className="mt-0.5 max-w-full truncate rounded bg-black/45 px-1 text-[9.5px] leading-tight font-medium text-white sm:text-[10.5px]">
               {lastName(p.short || p.name)}
             </span>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -389,10 +448,12 @@ function Lineups({ match }) {
             <p className="mb-2 font-mono text-[10.5px] tracking-[.16em] text-mist-500 uppercase">{team.short} bench</p>
             <ul className="space-y-1.5">
               {side.bench.map((p) => (
-                <li key={`${p.number}-${p.name}`} className="flex items-center gap-2 text-[12.5px]">
-                  <span className="w-5 text-right font-mono text-[11px] text-mist-500">{p.number}</span>
-                  <span className={cn("truncate", p.subbedIn ? "text-mist-100" : "text-mist-500")}>{p.name}</span>
-                  {p.subbedIn && <ArrowUp className="size-3 shrink-0 text-signal" aria-label="Came on" />}
+                <li key={`${p.number}-${p.name}`}>
+                  <button onClick={() => onOpenPlayer(p)} className="flex w-full items-center gap-2 rounded-lg py-0.5 text-left text-[12.5px] transition hover:bg-white/[.04]">
+                    <span className="w-5 text-right font-mono text-[11px] text-mist-500">{p.number}</span>
+                    <span className={cn("truncate", p.subbedIn ? "text-mist-100" : "text-mist-500")}>{p.name}</span>
+                    {p.subbedIn && <ArrowUp className="size-3 shrink-0 text-signal" aria-label="Came on" />}
+                  </button>
                 </li>
               ))}
             </ul>

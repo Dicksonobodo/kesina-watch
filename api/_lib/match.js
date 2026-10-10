@@ -24,9 +24,19 @@ function pitchSpot(abbr = "") {
   return { row, lane };
 }
 
+// A player's numbers in this match (only the ones worth showing, non-zero first).
+const PLAYER_STAT_LABELS = { G: "Goals", A: "Assists", SHOT: "Shots", SOG: "On target", SV: "Saves", GA: "Conceded", FC: "Fouls", FA: "Fouled", YC: "Yellow", RC: "Red", OF: "Offsides" };
+function playerStats(list = []) {
+  return list
+    .filter((s) => PLAYER_STAT_LABELS[s.abbreviation])
+    .map((s) => ({ key: s.abbreviation, label: PLAYER_STAT_LABELS[s.abbreviation], value: s.displayValue ?? String(s.value ?? 0) }));
+}
+
 function mapLineup(r) {
   if (!r) return null;
   const player = (p) => ({
+    id: p.athlete?.id ?? null,
+    stats: playerStats(p.stats),
     name: p.athlete?.displayName ?? "",
     short: p.athlete?.shortName ?? p.athlete?.displayName ?? "",
     number: p.jersey ?? "",
@@ -146,6 +156,75 @@ export async function getMatch({ league, id }) {
       stats,
       table: table.length ? table : null,
       broadcasters: [...new Set((j.broadcasts ?? []).map((b) => b.media?.shortName).filter(Boolean))].slice(0, 4),
+
+      // Minute-by-minute text, newest first.
+      commentary: (j.commentary ?? [])
+        .filter((c) => c.text)
+        .map((c) => ({ clock: c.time?.displayValue ?? "", text: c.text, type: c.play?.type?.text ?? "" }))
+        .reverse(),
+
+      // Official highlight clips (ESPN). Plain MP4 plays straight in a <video>.
+      highlights: (j.videos ?? [])
+        .filter((v) => v.links?.source?.href)
+        .slice(0, 6)
+        .map((v) => ({
+          id: String(v.id),
+          title: v.headline ?? "Highlights",
+          duration: v.duration ?? null,
+          thumbnail: v.thumbnail ?? null,
+          mp4: v.links.source.href,
+          hls: v.links.source.HLS?.href ?? null,
+        })),
+
+      // Best player per stat, for each team.
+      performers: (j.leaders ?? []).map((t) => ({
+        side: t.team?.id === home.team?.id ? "home" : "away",
+        categories: (t.leaders ?? [])
+          .map((cat) => {
+            const top = cat.leaders?.[0];
+            if (!top?.athlete) return null;
+            return {
+              label: cat.displayName ?? cat.name,
+              player: top.athlete.displayName,
+              playerId: top.athlete.id ?? null,
+              jersey: top.athlete.jersey ?? "",
+              value: top.mainStat?.value ?? top.displayValue ?? "",
+            };
+          })
+          .filter(Boolean),
+      })),
+
+      // Last five results for each team (W/D/L).
+      form: (j.lastFiveGames ?? []).map((t) => ({
+        side: t.team?.id === home.team?.id ? "home" : "away",
+        games: (t.events ?? []).slice(0, 5).map((e) => ({
+          result: e.gameResult ?? "",
+          score: e.score ?? "",
+          opponent: e.opponent?.displayName ?? "",
+          opponentLogo: e.opponentLogo ?? null,
+          venue: e.atVs === "@" ? "away" : "home",
+          date: e.gameDate ?? null,
+        })),
+      })),
+
+      // Previous meetings between these two teams.
+      headToHead: (() => {
+        const series = (j.seasonseries ?? [])[0];
+        if (!series) return null;
+        return {
+          summary: series.summary ?? "",
+          games: (series.events ?? []).slice(0, 8).map((e) => ({
+            date: e.date ?? null,
+            teams: (e.competitors ?? []).map((c) => ({ abbr: c.team?.abbreviation ?? "", logo: c.team?.logo ?? c.team?.logos?.[0]?.href ?? null, score: c.score ?? "", home: c.homeAway === "home" })),
+          })),
+        };
+      })(),
+
+      news: (j.news?.articles ?? []).slice(0, 6).map((a) => ({
+        title: a.headline ?? "",
+        link: a.links?.web?.href ?? null,
+        image: a.images?.[0]?.url ?? null,
+      })).filter((n) => n.title && n.link),
     };
     // Live: refresh every 20s. Finished: final. Upcoming: every 10 minutes (line-ups appear about an hour before).
     return { value, ttl: state === "in" ? 20_000 : state === "post" ? 6 * 3600_000 : 10 * 60_000 };
