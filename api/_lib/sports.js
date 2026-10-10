@@ -1,11 +1,14 @@
 import * as cheerio from "cheerio";
-import { USER_AGENT } from "./config.js";
-import { log } from "./log.js";
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+const log = { warn: (msg, fields) => console.warn(JSON.stringify({ level: "warn", msg, ...fields, error: fields?.error?.message })) };
 
 /*
  * Sports data for the Sports tab: fixtures, live scores and results (ESPN's public scoreboard
  * feed, no key needed) and football news (official RSS feeds). Everything is cached here so
  * thousands of visitors cost the sources a handful of requests per minute.
+ *
+ * Runs as Vercel functions (api/sports/*), so Sports works even when the detection server is off.
+ * Vercel's CDN caches the responses too (see Cache-Control in the route files).
  */
 
 export const LEAGUES = [

@@ -13,7 +13,6 @@ import { relayHandler, relayStats, signRelayToken } from "./relay.js";
 import { clientLogHandler } from "./clientLog.js";
 import { HttpError } from "./safety.js";
 import { recordDetection, recordPresence, snapshot } from "./activity.js";
-import { getMatches, getNews } from "./sports.js";
 import { billingConfig, startCheckout, verifyCheckout, webhookHandler } from "./billing.js";
 
 const app = express();
@@ -98,27 +97,6 @@ app.post("/detect", requireUser, rateLimit, async (req, res, next) => {
 
 // Streams a video file or stream piece for sources that block the browser (see relay.js).
 app.get("/relay", relayHandler);
-
-/* ---------- sports (public, cached) ---------- */
-
-app.get(
-  "/sports/matches",
-  wrap(async (req, res) => {
-    const day = Math.max(-7, Math.min(7, Number(req.query.day) || 0));
-    const league = typeof req.query.league === "string" ? req.query.league : undefined;
-    const data = await getMatches({ day, league });
-    res.setHeader("Cache-Control", `public, max-age=${data.live ? 20 : 120}`);
-    return data;
-  }),
-);
-
-app.get(
-  "/sports/news",
-  wrap(async (_req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=300");
-    return { items: await getNews() };
-  }),
-);
 
 /* ---------- premium ---------- */
 

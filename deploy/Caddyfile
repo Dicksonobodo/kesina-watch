@@ -1,0 +1,7 @@
+# Caddy gets and renews the HTTPS certificate for {$DOMAIN} automatically (Let's Encrypt).
+{$DOMAIN} {
+	reverse_proxy server:8787 {
+		# Stream bytes immediately: video relay and the admin live stream.
+		flush_interval -1
+	}
+}

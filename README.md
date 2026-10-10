@@ -78,7 +78,7 @@ Downloads run **in the user's browser** (`src/features/downloads/engine/`):
 ## Live, Sports, Admin & Premium
 
 - **Live** (`/live`): paste a concert / programme / channel page or a direct `.m3u8` link; the stream starts playing automatically. Pinned live channels sit below it.
-- **Sports** (`/sports`): fixtures, live scores (refresh every 30s while matches are live), results, official broadcasters, calendar reminders (.ics) and football news. Server endpoints `/sports/matches` and `/sports/news`, cached server-side; data from ESPN's public scoreboard feed and BBC / Sky / ESPN RSS.
+- **Sports** (`/sports`): fixtures, live scores (refresh every 30s while matches are live), results, official broadcasters, calendar reminders (.ics) and football news. Runs as **Vercel functions** (`api/sports/*`, cached at Vercel's edge), so it works even when the detection server is off; `npm run dev` serves them locally too. Data: ESPN's public scoreboard feed and BBC / Sky / ESPN RSS.
 - **Admin** (`/admin`): live dashboard (updates every ~3s) with people online, who is watching what (live or movie), downloads, detections, errors, a one-hour online chart, an activity feed and server health. Only emails in `ADMIN_EMAILS` (server/.env) can open it. Each signed-in tab reports to `POST /presence` every 30s.
 - **Continue watching:** the player saves your position every 10s (`users/{uid}/progress`); Home shows a row and reopening resumes where you stopped.
 - **Subtitles:** subtitle tracks inside streams and `.vtt` / `.srt` files found on the page appear in the player's CC menu (SRT converted automatically).
@@ -123,7 +123,7 @@ Use that https address as `VITE_API_URL` in Vercel (redeploy after changing it),
 `ALLOWED_ORIGINS=https://<project>.vercel.app,https://<project>-*.vercel.app,http://localhost:5173`.
 The tunnel address changes every time it starts, and your PC must stay on.
 
-**For real users:** `server/Dockerfile` runs on any Docker host (Oracle Always Free VM, Render, Koyeb…). Set `PUBLIC_URL`, `ALLOWED_ORIGINS`, `FIREBASE_PROJECT_ID` and a fixed `RELAY_SECRET`.
+**For real users (24/7, laptop off):** follow [deploy/README.md](deploy/README.md): Oracle Cloud Always Free + a free DuckDNS name + automatic HTTPS (Caddy), set up by one script.
 
 ### Website → your own hosting (Apache / cPanel) instead
 

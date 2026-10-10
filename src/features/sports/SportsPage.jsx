@@ -1,11 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { CalendarPlus, ExternalLink, Newspaper, RefreshCw, Trophy, Tv } from "lucide-react";
-import { api, isDemoApi } from "@/lib/api";
 import { LiveDot } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/cn";
 import { reportError } from "@/lib/monitoring";
+
+// Served by Vercel functions on the same site (api/sports/*), independent of the detection server.
+async function getJson(path) {
+  let res;
+  try {
+    res = await fetch(path, { signal: AbortSignal.timeout(15_000) });
+  } catch {
+    throw new Error(navigator.onLine ? "Scores are unavailable right now." : "You're offline.");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Scores are unavailable right now.");
+  return data;
+}
 
 const DAYS = [
   { day: -1, label: "Yesterday" },
@@ -29,13 +41,12 @@ export function SportsPage() {
 
   // Matches: refresh every 30s while anything is live today, every 2 minutes otherwise.
   useEffect(() => {
-    if (isDemoApi) return setError("Sports needs the Dixon Watch server.");
     let cancelled = false;
     let timer;
     const load = async () => {
       setRefreshing(true);
       try {
-        const next = await api(`/sports/matches?day=${day}`, { auth: false });
+        const next = await getJson(`/api/sports/matches?day=${day}`);
         if (!cancelled) {
           setData(next);
           setError("");
@@ -57,8 +68,7 @@ export function SportsPage() {
   }, [day]);
 
   useEffect(() => {
-    if (isDemoApi) return;
-    api("/sports/news", { auth: false })
+    getJson("/api/sports/news")
       .then((d) => setNews(d.items))
       .catch((err) => {
         setNews([]);
