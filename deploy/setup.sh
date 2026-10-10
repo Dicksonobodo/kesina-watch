@@ -32,12 +32,13 @@ if ! command -v docker >/dev/null; then
   sudo usermod -aG docker "$USER"
 fi
 
-# Oracle's Ubuntu images block everything except SSH at the OS firewall, even after you open
-# the ports in the Oracle console. Open 80 (certificate check) and 443 (HTTPS) here too.
+# Some images (Oracle) block everything except SSH at the OS firewall, even after the ports are
+# opened in the cloud console. Allow 80 (certificate check) and 443 (HTTPS) first in line.
+# On images with an open firewall (Google Cloud, most VPS) this is harmless.
 step "Opening ports 80 and 443 in the OS firewall"
 for port in 80 443; do
   sudo iptables -C INPUT -p tcp --dport "$port" -m state --state NEW -j ACCEPT 2>/dev/null ||
-    sudo iptables -I INPUT 6 -p tcp --dport "$port" -m state --state NEW -j ACCEPT
+    sudo iptables -I INPUT 1 -p tcp --dport "$port" -m state --state NEW -j ACCEPT
 done
 sudo netfilter-persistent save
 
@@ -54,6 +55,12 @@ if [ ! -f server.env ]; then
   cp server.env.example server.env
   SECRET="$(openssl rand -hex 32)"
   sed -i "s/^RELAY_SECRET=.*/RELAY_SECRET=${SECRET}/" server.env
+  # Small machines (Google Cloud e2-micro: 1 GB) can only run one Chrome page at a time.
+  MEM_MB=$(free -m | awk '/^Mem:/ {print $2}')
+  if [ "${MEM_MB:-0}" -lt 2500 ]; then
+    sed -i "s/^BROWSER_SLOTS=.*/BROWSER_SLOTS=1/" server.env
+    echo "Small machine (${MEM_MB} MB): one Chrome page at a time."
+  fi
   echo "Edit deploy/server.env if your Vercel address differs from kesina-watch.vercel.app."
 fi
 
