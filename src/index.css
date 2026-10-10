@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surfaces: after-dark cinema */
+  --color-ink-950: #07070a;
+  --color-ink-900: #0c0c11;
+  --color-ink-800: #14141b;
+  --color-ink-700: #1d1d27;
+  --color-ink-600: #2a2a37;
+
+  /* Text */
+  --color-mist-100: #f3f3f6;
+  --color-mist-300: #b8b8c7;
+  --color-mist-500: #7a7a8c;
+  --color-mist-700: #4a4a58;
+
+  /* Signal: the one loud colour (Shield, Download, focus) */
+  --color-signal: #c6ff3d;
+  --color-signal-dim: #b2ec22;
+  /* Live: concerts, errors, LIVE badges */
+  --color-live: #ff5a4e;
+
+  --font-display: "Unbounded", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-scan: scan 1.8s ease-in-out infinite;
+
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes scan {
+    0%, 100% { transform: translateY(-100%); opacity: 0; }
+    20%, 80% { opacity: 1; }
+    50% { transform: translateY(100%); }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-ink-950 font-sans text-mist-100 antialiased;
+    min-height: 100dvh;
+  }
+  ::selection {
+    background: var(--color-signal);
+    color: var(--color-ink-950);
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--color-ink-600); border-radius: 99px; border: 3px solid var(--color-ink-950); }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+/* Film grain over everything */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@utility glass {
+  background: rgb(255 255 255 / 0.035);
+  border: 1px solid rgb(255 255 255 / 0.07);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+@utility glass-strong {
+  background: rgb(16 16 22 / 0.72);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+}
+
+@utility text-glow {
+  text-shadow: 0 0 24px rgb(198 255 61 / 0.45);
+}
+
+@utility skeleton {
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.04) 25%, rgb(255 255 255 / 0.1) 50%, rgb(255 255 255 / 0.04) 75%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Subtitles in the player */
+video::cue {
+  font-family: var(--font-sans);
+  font-size: clamp(16px, 2.4vw, 28px);
+  line-height: 1.35;
+  color: #fff;
+  background: rgb(0 0 0 / 0.62);
+}

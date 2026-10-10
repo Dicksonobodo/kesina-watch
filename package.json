@@ -1,0 +1,31 @@
+{
+  "name": "dixon-watch",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "npm --prefix server run dev",
+    "server:install": "npm --prefix server install",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@sentry/react": "^11.6.0",
+    "clsx": "^2.1.1",
+    "firebase": "^13.0.0",
+    "hls.js": "^1.7.3",
+    "lucide-react": "^1.54.0",
+    "motion": "^14.1.0",
+    "mux.js": "^6.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.4"
+  }
+}
