@@ -285,7 +285,7 @@ function NoSource({ drm, url }) {
           <p className="mt-1 text-sm leading-relaxed text-mist-500">
             {drm
               ? "It's locked by the provider, so it can't be downloaded or played outside their site."
-              : "The page may need you to pick an episode or server first, or the video is on another page. Try the link of the page where the player is."}
+              : "No video was found on this page. If this is a show or movie listing, open the original site, choose an episode and server, wait for its player page to load, then paste that page's URL here. You can also paste a direct video link. Some sites don't make their video available for detection."}
           </p>
         </div>
       </div>
