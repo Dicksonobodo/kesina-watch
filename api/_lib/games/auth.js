@@ -1,3 +1,5 @@
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import { parseServiceAccount, projectIdFromEnv } from "./admin.js";
 import { usesFirestore } from "./store.js";
 
 /*
@@ -18,14 +20,24 @@ export class AuthError extends Error {
 const devAllowed = () => !process.env.VERCEL && !usesFirestore() && process.env.NODE_ENV !== "production";
 const adminEmails = () => (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
 
-let verifier;
-async function getVerifier() {
-  if (!verifier) {
-    const { getAuth } = await import("firebase-admin/auth");
-    const { adminApp } = await import("./admin.js");
-    verifier = getAuth(adminApp());
-  }
-  return verifier;
+/*
+ * Firebase ID tokens are ordinary signed JWTs, so they are verified here with `jose` against
+ * Google's public keys. (firebase-admin's own verifier loads a library that fails to start on
+ * some Node versions, which is why it isn't used for this.)
+ */
+const GOOGLE_KEYS = new URL("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com");
+let remoteKeys;
+
+export async function verifyFirebaseToken(token, keys) {
+  const projectId = projectIdFromEnv() || parseServiceAccount().projectId;
+  if (!projectId) throw Object.assign(new Error("No Firebase project id is configured."), { code: "config/no-project-id" });
+  const { payload } = await jwtVerify(token, keys ?? (remoteKeys ??= createRemoteJWKSet(GOOGLE_KEYS)), {
+    issuer: `https://securetoken.google.com/${projectId}`,
+    audience: projectId,
+    algorithms: ["RS256"],
+  });
+  if (!payload.sub) throw Object.assign(new Error("Token has no user."), { code: "auth/no-subject" });
+  return payload;
 }
 
 /** Returns { uid, name, email, admin } or throws AuthError. */
@@ -41,9 +53,9 @@ export async function identify(request) {
   }
 
   try {
-    const decoded = await (await getVerifier()).verifyIdToken(token);
+    const decoded = await verifyFirebaseToken(token);
     const email = decoded.email ?? null;
-    return { uid: decoded.uid, name: decoded.name || (email ? email.split("@")[0] : "Player"), email, admin: Boolean(email && adminEmails().includes(email.toLowerCase())) };
+    return { uid: decoded.sub, name: decoded.name || (email ? email.split("@")[0] : "Player"), email, admin: Boolean(email && adminEmails().includes(email.toLowerCase())) };
   } catch (err) {
     // Say why in the server log (never the token), and give the browser a short code.
     const code = err?.code || err?.errorInfo?.code || "auth/unknown";
