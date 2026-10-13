@@ -8,9 +8,10 @@ import { usesFirestore } from "./store.js";
  */
 
 export class AuthError extends Error {
-  constructor(message = "Please sign in to play.") {
+  constructor(message = "Please sign in to play.", code) {
     super(message);
     this.status = 401;
+    this.code = code;
   }
 }
 
@@ -20,12 +21,9 @@ const adminEmails = () => (process.env.ADMIN_EMAILS || "").split(",").map((e) =>
 let verifier;
 async function getVerifier() {
   if (!verifier) {
-    const { getApps, initializeApp } = await import("firebase-admin/app");
     const { getAuth } = await import("firebase-admin/auth");
-    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
-    if (!projectId) throw new Error("FIREBASE_PROJECT_ID is not set");
-    const app = getApps()[0] ?? initializeApp({ projectId });
-    verifier = getAuth(app);
+    const { adminApp } = await import("./admin.js");
+    verifier = getAuth(adminApp());
   }
   return verifier;
 }
@@ -46,7 +44,10 @@ export async function identify(request) {
     const decoded = await (await getVerifier()).verifyIdToken(token);
     const email = decoded.email ?? null;
     return { uid: decoded.uid, name: decoded.name || (email ? email.split("@")[0] : "Player"), email, admin: Boolean(email && adminEmails().includes(email.toLowerCase())) };
-  } catch {
-    throw new AuthError("Your sign-in expired. Please sign in again.");
+  } catch (err) {
+    // Say why in the server log (never the token), and give the browser a short code.
+    const code = err?.code || err?.errorInfo?.code || "auth/unknown";
+    console.error(JSON.stringify({ level: "warn", msg: "sign-in check failed", code, error: String(err?.message).slice(0, 200) }));
+    throw new AuthError("Your sign-in couldn't be verified. Sign out and in again; if it keeps happening the server setup needs attention.", code);
   }
 }

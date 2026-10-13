@@ -7,6 +7,7 @@ import { answerRoom, cancelRoom, createRoom, friendsRanking, getRoom, joinRoom, 
 import { COMPETITIONS, createLeague, fixtures, joinLeague, leaveLeague, myLeagues, myPredictions, place, settle } from "./_lib/games/predictor.js";
 import { decideQuestion, pendingQuestions, reportQuestion, submitQuestion } from "./_lib/games/questions.js";
 import { usesFirestore } from "./_lib/games/store.js";
+import { parseServiceAccount, projectIdFromEnv } from "./_lib/games/admin.js";
 import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
 
 /*
@@ -76,6 +77,26 @@ const ACTIONS = {
   },
 };
 
+/** Open /api/games in a browser to see whether the server setup is complete (no secrets are shown). */
+export async function GET() {
+  const sa = parseServiceAccount();
+  const projectId = projectIdFromEnv();
+  const checks = {
+    projectId: projectId || null,
+    serviceAccount: !sa.present ? "missing" : sa.valid ? "ok" : `invalid (${sa.error ?? "missing private_key or client_email"})`,
+    serviceAccountMatchesProject: sa.valid && projectId ? sa.projectId === projectId : null,
+    store: usesFirestore() ? "firestore" : "memory",
+    adminEmails: (process.env.ADMIN_EMAILS || "").split(",").filter((e) => e.trim()).length,
+  };
+  const problems = [];
+  if (!projectId) problems.push("Set VITE_FIREBASE_PROJECT_ID (or FIREBASE_PROJECT_ID).");
+  if (!sa.present) problems.push("Set FIREBASE_SERVICE_ACCOUNT to the full service-account JSON.");
+  else if (!sa.valid) problems.push("FIREBASE_SERVICE_ACCOUNT isn't valid JSON. Paste the whole file again, as one line.");
+  if (sa.valid && projectId && sa.projectId !== projectId) problems.push(`The service account is for project "${sa.projectId}" but the website uses "${projectId}". They must be the same Firebase project.`);
+  if (!checks.adminEmails) problems.push("Set ADMIN_EMAILS to your sign-in email to review questions.");
+  return Response.json({ ok: problems.length === 0, ...checks, problems }, { headers: { "Cache-Control": "no-store" } });
+}
+
 export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -88,6 +109,6 @@ export async function POST(request) {
   } catch (err) {
     const status = err instanceof AuthError || err instanceof GameError ? err.status : 500;
     if (status === 500) console.error(JSON.stringify({ level: "error", msg: "games action failed", error: err?.message, stack: err?.stack?.split("\n").slice(0, 4) }));
-    return Response.json({ error: status === 500 ? "Something went wrong. Please try again." : err.message }, { status, headers: { "Cache-Control": "no-store" } });
+    return Response.json({ error: status === 500 ? "Something went wrong. Please try again." : err.message, ...(err.code ? { code: err.code } : {}) }, { status, headers: { "Cache-Control": "no-store" } });
   }
 }

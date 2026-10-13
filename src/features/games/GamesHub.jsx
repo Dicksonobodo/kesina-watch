@@ -40,7 +40,7 @@ export function GamesHub() {
         }
       />
 
-      <ErrorNote>{error && `${error} The games server may be offline.`}</ErrorNote>
+      <ErrorNote>{error}</ErrorNote>
 
       {/* Player strip */}
       <div className="mt-8 grid gap-3 lg:grid-cols-[1.4fr_1fr]">

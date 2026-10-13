@@ -91,14 +91,9 @@ function memoryBackend() {
 /* ---------- Firestore backend ---------- */
 
 async function firestoreBackend() {
-  const { cert, getApps, initializeApp } = await import("firebase-admin/app");
-  const { FieldValue, getFirestore } = await import("firebase-admin/firestore");
-  const app =
-    getApps()[0] ??
-    initializeApp({
-      credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)),
-      projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID,
-    });
+  const { adminApp } = await import("./admin.js");
+  const { getFirestore, FieldValue } = await import("firebase-admin/firestore");
+  const app = adminApp();
   const db = getFirestore(app);
   try {
     db.settings({ ignoreUndefinedProperties: true }); // must run before the first read or write
