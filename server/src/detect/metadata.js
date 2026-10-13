@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { cleanLabel } from "./streams.js";
 
 const MEDIA_URL_RE = /https?:\/\/[^\s"'<>\\()]+?\.(?:mp4|m3u8|webm|mov|mkv)(?:\?[^\s"'<>\\()]*)?/gi;
 
@@ -61,6 +62,7 @@ export function extractMetadata(html, pageUrl) {
     poster: poster || null,
     runtime: isoDurationToMinutes(ld.duration),
     candidates: extractCandidates($, html, pageUrl, ld),
+    candidateHints: extractHints($, html, pageUrl),
     resources: extractResources($, pageUrl),
     subtitles: extractSubtitles($, html, pageUrl),
   };
@@ -128,6 +130,51 @@ function extractCandidates($, html, pageUrl, ld) {
   });
 
   return [...found].filter((u) => !/\.(ts|m4s)(\?|$)/i.test(u));
+}
+
+const URL_ATTRS = ["data-src", "data-url", "data-stream", "data-link", "data-file", "data-source", "data-m3u8", "data-hls", "data-video", "href", "src"];
+const MEDIA_EXT = /\.(m3u8|mpd|mp4|webm|mkv|mov)(\b|$)/i;
+const NAME_KEYS = /"(?:name|title|label|channel|channelName|channel_name|display_name|displayName)"\s*:\s*"([^"]{2,60})"/gi;
+
+/**
+ * Labels for the media addresses in a page: the text of the link or button that carries the
+ * address, a title on the player, or the name/title next to it in a script's channel list.
+ * Returns { absoluteUrl: label }.
+ */
+function extractHints($, html, pageUrl) {
+  const hints = {};
+  const put = (u, label) => {
+    const abs = absolute(u, pageUrl);
+    const text = cleanLabel(label);
+    if (abs.startsWith("http") && text && !(abs in hints)) hints[abs] = text;
+  };
+
+  const selector = URL_ATTRS.map((a) => `[${a}*=".m3u8"], [${a}*=".mpd"], [${a}*=".mp4"]`).join(", ");
+  $(selector).each((_, el) => {
+    const $el = $(el);
+    const u = URL_ATTRS.map((a) => $el.attr(a)).find((v) => v && MEDIA_EXT.test(v));
+    if (!u) return;
+    const label =
+      $el.attr("title") || $el.attr("aria-label") || $el.attr("data-title") || $el.attr("data-name") || $el.attr("alt") ||
+      $el.find("img[alt]").first().attr("alt") || $el.text() ||
+      $el.closest("video").attr("title") || $el.parent().attr("title") || "";
+    put(u, label);
+  });
+
+  // Channel lists inside scripts: …{"name":"Arise News","url":"https://…/arise.m3u8"}…
+  const text = html.replace(/\\\//g, "/").replace(/\\u0026/gi, "&");
+  const names = [...text.matchAll(NAME_KEYS)].map((m) => ({ at: m.index, label: m[1] }));
+  if (names.length) {
+    for (const m of text.matchAll(MEDIA_URL_RE)) {
+      let best = null;
+      for (const n of names) {
+        const d = Math.abs(n.at - m.index);
+        if (d < 260 && (!best || d < best.d)) best = { d, label: n.label };
+      }
+      if (best) put(m[0], best.label);
+    }
+  }
+  return hints;
 }
 
 function meta($, sel) {

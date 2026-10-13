@@ -1,11 +1,10 @@
 import { Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
-import { Compass, Gauge, House, Library, Pin, Radio, ShieldCheck, Trophy, UserRound, WifiOff } from "lucide-react";
+import { Gamepad2, Gauge, Pin, Radio, ShieldCheck, Trophy, UserRound, WifiOff } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth, isFirebaseConfigured } from "@/features/auth/AuthProvider";
 import { useShield } from "@/features/shield/ShieldProvider";
-import { DownloadsTray } from "@/features/downloads/DownloadsTray";
 import { PresenceReporter } from "@/features/account/PresenceReporter";
 import { useAccount } from "@/features/account/AccountProvider";
 import { Logo } from "@/components/ui/Logo";
@@ -15,13 +14,11 @@ import { cn } from "@/lib/cn";
 import { onSyncProblem } from "@/lib/userData";
 
 const NAV = [
-  { to: "/", label: "Home", icon: House, end: true },
-  { to: "/browse", label: "Browse", icon: Compass },
   { to: "/live", label: "Live", icon: Radio },
   { to: "/sports", label: "Sports", icon: Trophy },
-  { to: "/library", label: "Library", icon: Library },
+  { to: "/games", label: "Games", icon: Gamepad2 },
   { to: "/sites", label: "Pinned", icon: Pin, desktopOnly: true },
-  // On phones, Profile is the avatar in the top bar (the tab bar holds the five main sections).
+  // On phones, Profile is the avatar in the top bar (the tab bar holds the main sections).
   { to: "/profile", label: "Profile", icon: UserRound, hidden: true },
 ];
 const ADMIN_NAV = { to: "/admin", label: "Admin", icon: Gauge };
@@ -97,11 +94,10 @@ export function AppShell() {
         </motion.div>
       </main>
 
-      <DownloadsTray />
       <PresenceReporter />
 
       {/* Mobile tab bar */}
-      <nav className="glass-strong fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 grid h-16 grid-cols-5 rounded-[22px] px-1.5 lg:hidden">
+      <nav className="glass-strong fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 grid h-16 grid-cols-3 rounded-[22px] px-1.5 lg:hidden">
         {NAV.filter((n) => !n.desktopOnly && !n.hidden).map((item) => (
           <TabLink key={item.to} {...item} />
         ))}
@@ -208,7 +204,7 @@ function OfflineBanner() {
     <div className="relative mx-auto mt-4 max-w-6xl px-4 sm:px-6 lg:px-10">
       <div className="flex items-center gap-3 rounded-2xl bg-white/[.04] px-4 py-3 text-[13px] text-mist-300 ring-1 ring-white/10">
         <WifiOff className="size-4 shrink-0 text-mist-500" />
-        You're offline. Detecting, playing and downloading need a connection; running downloads resume their retries when it's back.
+        You're offline. Finding streams, playing and scores need a connection.
       </div>
     </div>
   );
@@ -231,7 +227,7 @@ function SyncProblemBanner() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-live/[.08] px-4 py-3 text-[13px] text-mist-300 ring-1 ring-live/25">
         <span className="font-mono text-[11px] font-medium tracking-wider text-live uppercase">Sync off</span>
         <span>
-          Your library can&apos;t be saved: Firestore is refusing access. In the Firebase console, open Firestore → Rules, paste the contents of{" "}
+          Your pinned pages can&apos;t be saved: Firestore is refusing access. In the Firebase console, open Firestore → Rules, paste the contents of{" "}
           <code className="font-mono text-mist-100">firestore.rules</code> and press Publish.
         </span>
       </div>

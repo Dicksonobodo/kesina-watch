@@ -1,7 +1,7 @@
 {
   "name": "Dixon Watch",
   "short_name": "Dixon Watch",
-  "description": "Paste a movie link. Watch or download it with no ads, pop-ups or fake buttons.",
+  "description": "Watch live streams with no ads, pop-ups or fake buttons, plus live football scores.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -48,16 +48,6 @@
     {
       "name": "Sports",
       "url": "/sports",
-      "icons": [
-        {
-          "src": "/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
-    },
-    {
-      "name": "Library",
-      "url": "/library",
       "icons": [
         {
           "src": "/icon-192.png",

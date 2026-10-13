@@ -77,7 +77,7 @@ export function AuthPage() {
             {mode === "signin" ? "Welcome back." : "Start watching."}
           </h1>
           <p className="mt-2 text-[15px] text-mist-500">
-            {mode === "signin" ? "Sign in to your library and saved sites." : "One account. Every device. Zero ads."}
+            {mode === "signin" ? "Sign in to your pinned channels." : "One account. Every device. Zero ads."}
           </p>
 
           {/* Mode switch */}
@@ -218,7 +218,7 @@ export function AuthPage() {
         </div>
 
         <p className="mx-auto mt-10 max-w-[400px] text-center text-xs leading-relaxed text-mist-700">
-          By continuing you agree to only download content you have the right to download.
+          By continuing you agree to only watch content you have the right to watch.
         </p>
       </div>
     </div>
@@ -233,8 +233,8 @@ const SHOWCASE_POSTERS = [
 
 const PERKS = [
   { icon: ShieldCheck, text: "Ads, pop-ups and redirects blocked before you see them" },
-  { icon: MousePointerClick, text: "No fake download buttons. One real one." },
-  { icon: Zap, text: "Paste a link, pick a quality, done" },
+  { icon: MousePointerClick, text: "No fake buttons. Just the stream." },
+  { icon: Zap, text: "Paste a live link, press play" },
 ];
 
 function Showcase() {
@@ -266,7 +266,7 @@ function Showcase() {
 
       <div className="relative mt-auto p-10 pt-6">
         <h2 className="font-display text-[clamp(36px,4vw,56px)] leading-[0.98] font-extrabold tracking-tight">
-          Every movie.
+          Every live show.
           <br />
           <span className="text-signal text-glow">Zero ads.</span>
         </h2>

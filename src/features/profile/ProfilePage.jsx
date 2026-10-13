@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Bell, BellOff, Bookmark, Check, Crown, Gauge, LogOut, MonitorPlay, Send, ShieldCheck, Smartphone, Zap } from "lucide-react";
+import { Bookmark, Check, Crown, LogOut, Send, ShieldCheck, Smartphone, Zap } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useShield } from "@/features/shield/ShieldProvider";
 import { useAccount } from "@/features/account/AccountProvider";
 import { api } from "@/lib/api";
-import { notificationsState, requestNotifications } from "@/lib/notify";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -71,15 +70,12 @@ export function ProfilePage() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <SendToDixon />
-        <Notifications />
       </div>
 
       <section className="mt-10">
         <h3 className="font-mono text-[11px] font-medium tracking-[.22em] text-mist-500 uppercase">Preferences</h3>
         <div className="mt-3 divide-y divide-white/[.06] overflow-hidden rounded-3xl bg-white/[.025] ring-1 ring-white/[.06]">
-          <Pref icon={Gauge} title="Default quality" value="Best available" />
           <Pref icon={ShieldCheck} title="Shield strength" value="Strict" />
-          <Pref icon={MonitorPlay} title="Resume where I left off" value="On" />
         </div>
       </section>
     </div>
@@ -90,7 +86,7 @@ export function ProfilePage() {
 
 const PERKS = [
   "3× more detections per hour",
-  "Twice as many downloads and streams at once",
+  "Twice as many streams at once",
   "Priority when the server is busy",
   "Support Dixon Watch staying ad-free",
 ];
@@ -175,7 +171,7 @@ function SendToDixon() {
       <h3 className="flex items-center gap-2 font-semibold">
         <Send className="size-4 text-signal" /> Send to Dixon Watch in one tap
       </h3>
-      <p className="mt-2 text-sm leading-relaxed text-mist-500">Skip copy and paste. On any movie or live page, one tap opens it here with the ads stripped.</p>
+      <p className="mt-2 text-sm leading-relaxed text-mist-500">Skip copy and paste. On any live page, one tap opens it here with the ads stripped.</p>
       <div className="mt-5 space-y-4">
         <div>
           <p className="flex items-center gap-2 text-[13px] font-semibold text-mist-300">
@@ -199,37 +195,6 @@ function SendToDixon() {
             Install Dixon Watch (browser menu → <em>Install app</em> / <em>Add to Home screen</em>). Then use <em>Share</em> on any page and pick Dixon Watch.
           </p>
         </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------- Notifications ---------- */
-
-function Notifications() {
-  const [state, setState] = useState(notificationsState());
-  return (
-    <section className="rounded-3xl bg-white/[.025] p-6 ring-1 ring-white/[.06]">
-      <h3 className="flex items-center gap-2 font-semibold">
-        <Bell className="size-4 text-signal" /> Notifications
-      </h3>
-      <p className="mt-2 text-sm leading-relaxed text-mist-500">Get a notification when a download finishes or fails, even when Dixon Watch is in another tab.</p>
-      <div className="mt-5">
-        {state === "granted" ? (
-          <p className="flex items-center gap-2 text-sm text-signal">
-            <Check className="size-4" /> On for this browser
-          </p>
-        ) : state === "denied" ? (
-          <p className="flex items-center gap-2 text-sm text-mist-500">
-            <BellOff className="size-4" /> Blocked: allow notifications for this site in your browser settings.
-          </p>
-        ) : state === "unsupported" ? (
-          <p className="text-sm text-mist-500">This browser doesn&apos;t support notifications.</p>
-        ) : (
-          <Button variant="ghost" onClick={async () => setState(await requestNotifications())}>
-            <Bell className="size-4" /> Turn on
-          </Button>
-        )}
       </div>
     </section>
   );

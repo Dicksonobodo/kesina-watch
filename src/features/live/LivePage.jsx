@@ -19,6 +19,9 @@ const IDEAS = [
   { icon: Radio, title: "Direct stream links", body: "Got a .m3u8 link? Paste it straight in." },
 ];
 
+// A single live stream starts straight away; a page with several waits for the viewer to pick one.
+const multiAutoplay = (result, autoplay) => (result.streams?.filter((s) => s.live).length > 1 ? null : autoplay ?? { at: 0 });
+
 /** Live: paste any live link (page or stream) and watch it ad-free; pinned live channels below. */
 export function LivePage() {
   const { user } = useAuth();
@@ -61,7 +64,14 @@ export function LivePage() {
 
       <div className="mt-8">
         {status === "detecting" && <DetectionProgress url={url} demo={isDemoApi} />}
-        {status === "done" && result && <DetectionResult key={result.url} result={result} onReset={reset} autoplay={autoplay ?? (result.live ? { at: 0 } : null)} />}
+        {status === "done" && result && result.live && <DetectionResult key={result.url} result={result} onReset={reset} autoplay={multiAutoplay(result, autoplay)} liveOnly />}
+        {status === "done" && result && !result.live && (
+          <div className="glass rounded-[28px] p-6 text-center sm:p-8">
+            <p className="font-display text-xl font-bold">That isn&apos;t a live stream</p>
+            <p className="mt-2 text-sm text-mist-500">Dixon Watch only plays live streams. Paste the page of a live concert, event or channel.</p>
+            <button onClick={reset} className="mt-5 text-sm font-semibold text-signal">Try another link</button>
+          </div>
+        )}
       </div>
 
       {/* Pinned live channels */}
@@ -121,7 +131,7 @@ export function LivePage() {
         </section>
       )}
 
-      <AddSiteDialog open={adding} onClose={() => setAdding(false)} uid={user?.uid} defaultKind="live" title="Add a live channel" />
+      <AddSiteDialog open={adding} onClose={() => setAdding(false)} uid={user?.uid} title="Add a live channel" />
     </div>
   );
 }

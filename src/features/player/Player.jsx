@@ -7,6 +7,7 @@ import {
   Check,
   ExternalLink,
   Gauge,
+  ListVideo,
   Maximize,
   Minimize,
   Pause,
@@ -25,29 +26,32 @@ import { LiveDot } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
 import { attachSource, canUseRelay, formatTime } from "./engine";
 import { reportError } from "@/lib/monitoring";
-import { useAuth } from "@/features/auth/AuthProvider";
 import { setWatching } from "@/features/account/PresenceReporter";
-import { idFromUrl, putItem, readItem, removeItem } from "@/lib/userData";
 import { loadSubtitle } from "./subtitles";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const HIDE_AFTER_MS = 2800;
 const SEEK_STEP = 10;
-const SAVE_EVERY_MS = 10_000;
-
-/** Full-screen, ad-free cinema player for a detected movie or live stream. */
-export function Player({ result, source: initialSource, resumeAt: resumeFrom, onClose }) {
-  const { user } = useAuth();
+/** Full-screen, ad-free cinema player for a detected live stream. */
+export function Player({ result, source: initialSource, resumeAt: resumeFrom, onClose, streamTitle, streams, activeStreamId, onSelectStream }) {
   const videoRef = useRef(null);
   const shellRef = useRef(null);
   const engineRef = useRef(null);
   const resumeAt = useRef(resumeFrom || 0);
-  const progressId = idFromUrl("progress", result.url);
   const hideTimer = useRef(null);
   const lastTap = useRef({ t: 0, side: null });
 
   const [source, setSource] = useState(initialSource);
   const [mode, setMode] = useState("direct");
+  const firstSource = useRef(initialSource);
+  useEffect(() => {
+    // The parent switched to another stream: play it in this same player.
+    if (firstSource.current === initialSource) return;
+    firstSource.current = initialSource;
+    setSource(initialSource);
+    setMode("direct");
+    resumeAt.current = 0;
+  }, [initialSource]);
   const [playing, setPlaying] = useState(false);
   const [waiting, setWaiting] = useState(true);
   const [time, setTime] = useState(0);
@@ -146,60 +150,15 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
 
   /* ---------- presence: tell the admin view what's playing ---------- */
   useEffect(() => {
-    setWatching({ title: result.title, live: Boolean(result.live), site: result.site });
+    setWatching({ title: streamTitle || result.title, live: Boolean(result.live), site: result.site });
     return () => setWatching(null);
-  }, [result.title, result.live, result.site]);
-
-  /* ---------- resume where you left off ---------- */
-  useEffect(() => {
-    if (resumeFrom || !user || result.live || result.demo) return;
-    let cancelled = false;
-    readItem(user.uid, "progress", progressId).then((saved) => {
-      if (cancelled || !saved || saved.position < 30 || saved.position > saved.duration - 60) return;
-      const v = videoRef.current;
-      if (v && Number.isFinite(v.duration) && v.duration > 0) v.currentTime = saved.position;
-      else resumeAt.current = saved.position;
-      setResumedAt(saved.position);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [streamTitle, result.title, result.live, result.site]);
 
   useEffect(() => {
     if (!resumedAt) return;
     const t = setTimeout(() => setResumedAt(null), 6000);
     return () => clearTimeout(t);
   }, [resumedAt]);
-
-  /* ---------- save progress (Continue watching, synced across devices) ---------- */
-  useEffect(() => {
-    if (!user || result.live || result.demo) return;
-    const save = () => {
-      const v = videoRef.current;
-      if (!v || !Number.isFinite(v.duration) || v.duration < 120 || v.currentTime < 5) return;
-      if (v.currentTime > v.duration * 0.95) return removeItem(user.uid, "progress", progressId).catch(() => {});
-      putItem(user.uid, "progress", progressId, {
-        title: result.title,
-        poster: result.poster ?? null,
-        palette: result.palette ?? null,
-        site: result.site ?? null,
-        pageUrl: result.url,
-        quality: source.quality,
-        position: Math.floor(v.currentTime),
-        duration: Math.floor(v.duration),
-      }).catch(() => {});
-    };
-    const timer = setInterval(() => !videoRef.current?.paused && save(), SAVE_EVERY_MS);
-    const v = videoRef.current;
-    v.addEventListener("pause", save);
-    return () => {
-      clearInterval(timer);
-      v.removeEventListener("pause", save);
-      save(); // on close
-    };
-  }, [user, result, source.quality, progressId]);
 
   /* ---------- subtitles ---------- */
   const pageSubs = (result.subtitles ?? []).map((s, i) => ({ ...s, id: `page-${i}` }));
@@ -303,8 +262,7 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
   };
 
   const chooseLevel = (index) => {
-    const hls = engineRef.current?.hls;
-    if (hls) hls.currentLevel = index; // -1 = adaptive
+    engineRef.current?.setLevel(index); // -1 = adaptive (HLS and DASH)
     setLevel({ index, auto: index === -1 });
     setMenu(null);
   };
@@ -399,7 +357,7 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
       className={cn("fixed inset-0 z-[110] overflow-hidden bg-black select-none", !controls && playing && "cursor-none")}
       onPointerMove={(e) => e.pointerType === "mouse" && poke()}
       role="dialog"
-      aria-label={`Playing ${result.title}`}
+      aria-label={`Playing ${streamTitle || result.title}`}
     >
       {/* Ambient light in the letterbox, from the poster's colours */}
       <div
@@ -508,9 +466,12 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
           <ArrowLeft className="size-5" />
         </button>
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className="truncate font-display text-[17px] font-bold tracking-tight sm:text-xl">{result.title}</p>
+          <p className="flex items-center gap-2 font-display text-[17px] font-bold tracking-tight sm:text-xl">
+            {live && <LiveDot />}
+            <span className="truncate">{streamTitle || result.title}</span>
+          </p>
           <p className="truncate text-xs text-mist-300">
-            {[result.year, result.site].filter(Boolean).join(" · ")}
+            {[streamTitle && streamTitle !== result.title ? result.title : result.year, result.site].filter(Boolean).join(" · ")}
             {mode === "relay" && " · via Dixon server"}
           </p>
         </div>
@@ -565,6 +526,38 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
           )}
 
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            {streams?.length > 1 && (
+              <Menu
+                open={menu === "streams"}
+                onToggle={() => setMenu((m) => (m === "streams" ? null : "streams"))}
+                label="Streams on this page"
+                trigger={
+                  <>
+                    <ListVideo className="size-5" />
+                    <span className="hidden font-mono text-[11px] sm:inline">{streams.length} streams</span>
+                  </>
+                }
+              >
+                <div className="max-h-[50dvh] min-w-56 overflow-y-auto">
+                  {streams.map((st) => (
+                    <MenuItem
+                      key={st.id}
+                      active={st.id === activeStreamId}
+                      onClick={() => {
+                        setMenu(null);
+                        onSelectStream?.(st.id);
+                      }}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {st.live && <LiveDot />}
+                        <span className="truncate">{st.title}</span>
+                      </span>
+                    </MenuItem>
+                  ))}
+                </div>
+              </Menu>
+            )}
+
             {subOptions.length > 0 && (
               <Menu
                 open={menu === "subs"}

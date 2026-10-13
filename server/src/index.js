@@ -9,12 +9,10 @@ import { log } from "./log.js";
 import { detect, detectStats } from "./detect/index.js";
 import { closeBrowser } from "./detect/browser.js";
 import { getBlocker } from "./detect/blocker.js";
-import { relayHandler, relayStats, signRelayToken } from "./relay.js";
+import { relayHandler, relayMirrorHandler, relayStats, signRelayToken } from "./relay.js";
 import { clientLogHandler } from "./clientLog.js";
 import { HttpError } from "./safety.js";
 import { recordDetection, recordPresence, snapshot } from "./activity.js";
-import { browse } from "./browse.js";
-import { createRateLimit } from "./limits.js";
 import { billingConfig, startCheckout, verifyCheckout, webhookHandler } from "./billing.js";
 
 const app = express();
@@ -81,8 +79,16 @@ app.post("/detect", requireUser, rateLimit, async (req, res, next) => {
   const user = { email: req.email, name: req.name };
   try {
     const result = await detect(url);
-    log.info("detect", { id: req.id, engine: result.engine, ms: result.tookMs ?? 0, sources: result.sources.length, cached: Boolean(result.cached), url });
-    recordDetection({ ok: result.sources.length > 0, title: result.title, url, ms: result.tookMs, user });
+    log.info("detect", {
+      id: req.id,
+      engine: result.engine,
+      ms: result.tookMs ?? 0,
+      sources: result.sources.length,
+      reason: result.reason ?? undefined,
+      cached: Boolean(result.cached),
+      url, // logged without its query string (see log.js)
+    });
+    recordDetection({ ok: result.sources.some((s) => s.downloadable || s.live), title: result.title, url, ms: result.tookMs, user });
     // Tokens are per user, so they are added after the (shared) cache.
     const token = (referer) => signRelayToken({ uid: req.uid, referer, premium: req.premium });
     res.json({
@@ -99,20 +105,7 @@ app.post("/detect", requireUser, rateLimit, async (req, res, next) => {
 
 // Streams a video file or stream piece for sources that block the browser (see relay.js).
 app.get("/relay", relayHandler);
-
-/* ---------- browse a movie site (clean poster grid, no ads) ---------- */
-
-const browseLimit = createRateLimit(120); // pages per user per 10 minutes
-app.post(
-  "/browse",
-  requireUser,
-  browseLimit,
-  wrap(async (req) => {
-    const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
-    if (!url || url.length > 2048) throw new HttpError(400, "Type a website address.");
-    return browse(url);
-  }),
-);
+app.get(/^\/relay\/m\//, relayMirrorHandler); // mirror form for DASH players
 
 /* ---------- premium ---------- */
 

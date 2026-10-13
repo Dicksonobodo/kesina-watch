@@ -21,6 +21,8 @@ export const config = {
   browserSlots: num(process.env.BROWSER_SLOTS, 2),
   relayPerUser: num(process.env.RELAY_PER_USER, 8),
   relayTotal: num(process.env.RELAY_TOTAL, 200),
+  // Largest single file the relay will pass through (GB).
+  maxDownloadBytes: num(process.env.MAX_DOWNLOAD_GB, 10) * 1024 ** 3,
   // Emails that can open the admin dashboard.
   adminEmails: list(process.env.ADMIN_EMAILS).map((e) => e.toLowerCase()),
 };

@@ -1,6 +1,5 @@
 import { auth } from "./firebase";
-import { hostnameOf } from "./format";
-import { hash, paletteFor } from "./palette";
+import { paletteFor } from "./palette";
 import { reportError } from "./monitoring";
 
 const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
@@ -36,7 +35,7 @@ export async function api(path, { method = "GET", body, signal, auth: withAuth =
 }
 
 export async function detectMovie(url, { signal } = {}) {
-  if (isDemoApi) return demoDetect(url, signal);
+  if (isDemoApi) return demoDetect();
 
   const token = await auth?.currentUser?.getIdToken();
   // The server gives up at 75s; don't let the browser wait forever if the network stalls.
@@ -69,57 +68,12 @@ export async function detectMovie(url, { signal } = {}) {
   return { ...data, palette: data.palette ?? paletteFor(data.title || url) };
 }
 
-/* ---------- demo mode ---------- */
+/* ---------- no server configured ---------- */
 
-// "the-dark-knight-2008" → { title: "The Dark Knight", year: 2008 }
-function titleFromUrl(url) {
-  let slug = "";
-  try {
-    const parts = new URL(url).pathname.split("/").filter(Boolean);
-    slug = decodeURIComponent(parts.at(-1) ?? "").replace(/\.(html?|php|aspx?)$/i, "");
-  } catch {
-    /* ignore */
-  }
-  const yearMatch = slug.match(/(19|20)\d{2}/);
-  const words = slug
-    .replace(/(19|20)\d{2}.*$/, "")
-    .split(/[-_+.\s]+/)
-    .filter((w) => w && !/^\d+$/.test(w));
-  const title = words.length
-    ? words.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ")
-    : "Untitled Feature";
-  return { title, year: yearMatch ? Number(yearMatch[0]) : 2024 };
-}
-
-function demoDetect(url, signal) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      const h = hash(url);
-      const { title, year } = titleFromUrl(url);
-      const runtime = 92 + (h % 60);
-      const gb = 1.4 + (h % 15) / 10;
-      resolve({
-        demo: true,
-        url,
-        site: hostnameOf(url),
-        title,
-        year,
-        runtime,
-        poster: null,
-        palette: paletteFor(url),
-        adsBlocked: 18 + (h % 47),
-        popupsBlocked: 2 + (h % 6),
-        drm: false,
-        sources: [
-          { id: "1080", quality: "1080p", label: "Full HD", size: gb * 1024 ** 3, type: "file", container: "mp4" },
-          { id: "720", quality: "720p", label: "HD", size: gb * 0.55 * 1024 ** 3, type: "file", container: "mp4" },
-          { id: "480", quality: "480p", label: "SD", size: gb * 0.3 * 1024 ** 3, type: "file", container: "mp4" },
-        ],
-      });
-    }, 4200);
-    signal?.addEventListener("abort", () => {
-      clearTimeout(timer);
-      reject(new DOMException("Aborted", "AbortError"));
-    });
-  });
+// Without a detection server nothing can be analyzed. This used to return simulated
+// results with made-up qualities; an honest error is better than fake download buttons.
+function demoDetect() {
+  return Promise.reject(
+    new Error("The video analysis server isn't connected, so links can't be analyzed right now. Set VITE_API_URL to the server's address."),
+  );
 }

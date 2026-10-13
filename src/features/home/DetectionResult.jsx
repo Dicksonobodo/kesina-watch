@@ -1,43 +1,50 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Bookmark, BookmarkCheck, Clock, Download, ExternalLink, Globe, Lock, Pin, PinOff, Play, RotateCcw, SearchX, ShieldCheck } from "lucide-react";
+import { Clock, ExternalLink, ListVideo, Globe, Info, Lock, Pin, PinOff, Play, RotateCcw, SearchX, ShieldCheck } from "lucide-react";
 import { formatBytes } from "@/lib/format";
 import { Badge, LiveDot } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Poster } from "@/components/ui/Poster";
 import { cn } from "@/lib/cn";
-import { downloadBlocker, useDownloads } from "@/features/downloads/DownloadsProvider";
-import { canWriteToDisk } from "@/features/downloads/engine/sinks";
 import { Player } from "@/features/player/Player";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { useLibrary } from "@/features/library/LibraryProvider";
 import { pinSite } from "@/features/sites/SitesPage";
 import { idFromUrl, removeItem, useUserCollection } from "@/lib/userData";
 
 const ease = [0.22, 1, 0.36, 1];
 
-export function DetectionResult({ result, onReset, autoplay = null }) {
-  const [selected, setSelected] = useState(result.sources[0]?.id);
+export function DetectionResult({ result, onReset, autoplay = null, liveOnly = false }) {
+  // A page can carry several streams (channels, cameras, feeds): each has its own title and qualities.
+  const streamList = useMemo(() => {
+    const list = result.streams?.length ? result.streams : [{ id: null, title: result.title, live: result.live }];
+    return liveOnly ? list.filter((st) => st.live) : list;
+  }, [result, liveOnly]);
+  const sourcesOf = (st) => result.sources.filter((s) => (s.streamId ?? null) === (st.id ?? null) && (!liveOnly || s.live));
+  const [streamId, setStreamId] = useState(streamList[0]?.id ?? null);
+  const current = streamList.find((st) => st.id === streamId) ?? streamList[0];
+  const sources = current ? sourcesOf(current) : [];
+  const [selected, setSelected] = useState(sources[0]?.id);
   const [note, setNote] = useState("");
   const [a, b] = result.palette ?? ["#c6ff3d", "#0f7b5f"];
-  const source = result.sources.find((s) => s.id === selected);
-  const hasSources = result.sources.length > 0;
-  const { startDownload } = useDownloads();
-  const [starting, setStarting] = useState(false);
-  // Arriving from "Continue watching" (or a play link) opens the player straight away.
+  const source = sources.find((s) => s.id === selected) ?? sources[0];
+  const hasSources = sources.length > 0;
+  const multi = streamList.length > 1;
+  // Arriving from a play link opens the player straight away.
   const [watching, setWatching] = useState(() => Boolean(autoplay && !result.demo && result.sources.length));
+
+  // Picks a stream (and its best quality); `play` starts it, also while the player is open.
+  function chooseStream(id, play = false) {
+    const st = streamList.find((x) => x.id === id);
+    if (!st) return;
+    setStreamId(st.id);
+    setSelected(sourcesOf(st)[0]?.id);
+    setNote("");
+    if (play) setWatching(true);
+  }
   const { user } = useAuth();
-  const { isSaved, toggleSaved } = useLibrary();
   const { items: sites } = useUserCollection(user?.uid, "sites");
-  const saved = isSaved(result.url);
   const siteId = idFromUrl("site", result.url);
   const pinned = sites.some((s) => s.id === siteId);
-
-  function onSave() {
-    if (result.demo) return comingSoon("Saving to your library");
-    toggleSaved(result).catch((err) => setNote(err.message));
-    setNote(saved ? "" : "Saved. Find it in your Library on any device.");
-  }
 
   function onPin() {
     if (result.demo) return comingSoon("Pinning");
@@ -45,7 +52,6 @@ export function DetectionResult({ result, onReset, autoplay = null }) {
     action.catch((err) => setNote(err.message));
     setNote(pinned ? "" : "Pinned to Sites. Tap it there any time to watch live.");
   }
-  const blocker = downloadBlocker(source);
 
   function comingSoon(what) {
     setNote(
@@ -57,29 +63,8 @@ export function DetectionResult({ result, onReset, autoplay = null }) {
 
   function onWatch() {
     if (result.demo) return comingSoon("The clean player");
-    if (source?.type === "dash") return setNote("This stream format (DASH) can't be played here yet. Open the original page instead.");
     setNote("");
     setWatching(true);
-  }
-
-  async function onDownload() {
-    if (result.demo) return comingSoon("Downloading");
-    setStarting(true);
-    setNote("");
-    try {
-      const id = await startDownload(result, source);
-      if (id) {
-        setNote(
-          canWriteToDisk || source.type === "hls" || (source.size && source.size <= 700 * 1024 ** 2)
-            ? "Downloading. Track it in the downloads panel. Keep this tab open until it finishes."
-            : "Sent to your browser's downloads. It handles the progress from here.",
-        );
-      }
-    } catch (err) {
-      setNote(err.message);
-    } finally {
-      setStarting(false);
-    }
   }
 
   return (
@@ -149,12 +134,52 @@ export function DetectionResult({ result, onReset, autoplay = null }) {
 
           {hasSources ? (
             <>
+              {multi && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, ease }} className="mt-7">
+                  <p className="mb-2.5 flex items-center gap-2 font-mono text-[11px] tracking-[.18em] text-mist-500 uppercase">
+                    <ListVideo className="size-3.5" /> {streamList.length} {liveOnly ? "live streams" : "streams"} on this page
+                  </p>
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {streamList.map((st) => {
+                      const active = st.id === current?.id;
+                      return (
+                        <li key={st.id}>
+                          <button
+                            onClick={() => chooseStream(st.id, true)}
+                            aria-current={active}
+                            className={cn(
+                              "group flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left ring-1 transition",
+                              active ? "bg-signal/[.08] ring-signal/60" : "bg-white/[.03] ring-white/[.08] hover:bg-white/[.06]",
+                            )}
+                          >
+                            <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl ring-1 transition", active ? "bg-signal text-ink-950 ring-signal" : "bg-white/[.06] text-mist-300 ring-white/10 group-hover:text-mist-100")}>
+                              <Play className="size-4" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className={cn("block truncate text-[14px] font-semibold", active && "text-signal")}>{st.title}</span>
+                              <span className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-mist-500">
+                                {st.live && (
+                                  <>
+                                    <LiveDot /> Live
+                                  </>
+                                )}
+                                {st.qualities?.length > 0 && <span>{st.live ? "· " : ""}{st.qualities.slice(0, 3).join(" · ")}</span>}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </motion.div>
+              )}
+
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, ease }} className="mt-7">
                 <p className="mb-2.5 font-mono text-[11px] tracking-[.18em] text-mist-500 uppercase">
-                  {result.sources.length > 1 ? "Quality" : "Source"}
+                  {sources.length > 1 ? "Quality" : "Source"}
                 </p>
-                <div role="radiogroup" className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2">
-                  {result.sources.map((s) => (
+                <div role="radiogroup" className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-2">
+                  {sources.map((s) => (
                     <button
                       key={s.id}
                       role="radio"
@@ -167,11 +192,25 @@ export function DetectionResult({ result, onReset, autoplay = null }) {
                     >
                       <span className={cn("block font-display text-[15px] font-bold", selected === s.id && "text-signal")}>{s.quality}</span>
                       <span className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-mist-500">
-                        {s.live ? "live" : s.size ? `${s.type === "hls" ? "~" : ""}${formatBytes(s.size)}` : sourceKind(s)}
+                        {sourceKind(s)}
+                        {s.live ? " · live" : s.noAudio ? " · no sound" : s.size ? ` · ${sizeText(s)}` : ""}
                       </span>
+                      {s.downloadable === false && !s.live && (
+                        <Lock className="absolute top-2.5 right-2.5 size-3 text-mist-700" aria-label="Can't be downloaded" />
+                      )}
                     </button>
                   ))}
                 </div>
+                {source && <SourceDetails source={source} />}
+                {result.notes?.length > 0 && (
+                  <ul className="mt-3 space-y-1">
+                    {result.notes.map((n) => (
+                      <li key={n} className="flex items-start gap-1.5 text-[12px] leading-relaxed text-mist-500">
+                        <Info className="mt-0.5 size-3 shrink-0" /> {n}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </motion.div>
 
               <motion.div
@@ -180,19 +219,6 @@ export function DetectionResult({ result, onReset, autoplay = null }) {
                 transition={{ delay: 0.5, ease }}
                 className="mt-6 flex flex-col gap-2.5 sm:mt-auto sm:flex-row sm:pt-7"
               >
-                {!result.live && (
-                  <Button
-                    size="lg"
-                    className="sm:flex-1"
-                    loading={starting}
-                    disabled={Boolean(blocker) && !result.demo}
-                    onClick={onDownload}
-                  >
-                    {!starting && <Download className="size-[18px]" />}
-                    Download {source?.quality}
-                    {source?.size > 0 && <span className="font-mono text-xs font-medium opacity-60">{formatBytes(source.size)}</span>}
-                  </Button>
-                )}
                 <Button
                   variant={result.live ? "primary" : "ghost"}
                   size="lg"
@@ -201,8 +227,7 @@ export function DetectionResult({ result, onReset, autoplay = null }) {
                 >
                   <Play className="size-[18px]" /> {result.live ? "Watch live" : "Watch"}
                 </Button>
-                {result.live ? (
-                  <Button
+                <Button
                     variant="ghost"
                     size="lg"
                     onClick={onPin}
@@ -213,35 +238,22 @@ export function DetectionResult({ result, onReset, autoplay = null }) {
                     {pinned ? <PinOff className="size-[18px]" /> : <Pin className="size-[18px]" />}
                     <span className="sm:hidden">{pinned ? "Pinned" : "Pin"}</span>
                   </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    onClick={onSave}
-                    aria-label={saved ? "Remove from saved" : "Save for later"}
-                    title={saved ? "Remove from saved" : "Save for later"}
-                    className={cn(saved && "text-signal ring-1 ring-signal/40")}
-                  >
-                    {saved ? <BookmarkCheck className="size-[18px]" /> : <Bookmark className="size-[18px]" />}
-                    <span className="sm:hidden">{saved ? "Saved" : "Save"}</span>
-                  </Button>
-                )}
               </motion.div>
             </>
           ) : (
-            <NoSource drm={result.drm} url={result.url} />
+            <NoSource result={result} />
           )}
 
           <AnimatePresence>
-            {(note || (hasSources && blocker && !result.live)) && (
+            {note && (
               <motion.p
-                key={note || blocker}
+                key={note}
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 className="mt-3 text-[13px] text-mist-500"
               >
-                {note || blocker}
+                {note}
               </motion.p>
             )}
           </AnimatePresence>
@@ -250,25 +262,80 @@ export function DetectionResult({ result, onReset, autoplay = null }) {
 
       <div className="mt-4 flex justify-center">
         <Button variant="subtle" size="sm" onClick={onReset}>
-          <RotateCcw className="size-3.5" /> Detect another link
+          <RotateCcw className="size-3.5" /> Analyze another link
         </Button>
       </div>
 
       <AnimatePresence>
-        {watching && <Player key={source.id} result={result} source={source} resumeAt={autoplay?.at} onClose={() => setWatching(false)} />}
+        {watching && source && (
+          <Player
+            key={result.url}
+            result={result}
+            source={source}
+            resumeAt={autoplay?.at}
+            streamTitle={multi || current?.title !== result.title ? current?.title : undefined}
+            streams={multi ? streamList : undefined}
+            activeStreamId={current?.id}
+            onSelectStream={(id) => chooseStream(id)}
+            onClose={() => setWatching(false)}
+          />
+        )}
       </AnimatePresence>
     </motion.section>
   );
 }
 
 function sourceKind(s) {
-  if (s.type === "hls") return "stream";
-  if (s.type === "dash") return "dash";
-  return s.container || "file";
+  if (s.type === "hls") return "HLS";
+  if (s.type === "dash") return "DASH";
+  return (s.container || "file").toUpperCase();
 }
 
-function NoSource({ drm, url }) {
-  const Icon = drm ? Lock : SearchX;
+// Exact byte counts come from the server's Content-Length; stream sizes are estimated
+// from the bitrate, so they carry a "~".
+function sizeText(s) {
+  return `${s.sizeEstimated ? "~" : ""}${formatBytes(s.size)}`;
+}
+
+function SourceDetails({ source }) {
+  const parts = [];
+  if (source.type === "file") parts.push(`${(source.container || "video").toUpperCase()} file`);
+  if (source.type === "hls") parts.push(source.live ? "Live HLS stream" : "HLS stream");
+  if (source.type === "dash") parts.push(source.live ? "Live DASH stream" : "DASH stream");
+  if (source.height) parts.push(`${source.height}p`);
+  if (source.size) parts.push(source.sizeEstimated ? `about ${formatBytes(source.size)} (estimated)` : formatBytes(source.size));
+  if (source.duration && !source.live) parts.push(`${Math.round(source.duration / 60)} min`);
+  if ((source.audioUrl || source.audioRep) && !source.live) parts.push("separate audio track");
+  if (source.noAudio) parts.push("video only: no sound track was found");
+  if (source.encryption === "AES-128") parts.push("AES-128 encrypted");
+  return <p className="mt-2.5 font-mono text-[11px] leading-relaxed text-mist-500">{parts.join(" · ")}</p>;
+}
+
+const NO_SOURCE_COPY = {
+  drm: { icon: Lock, title: "This video is DRM-protected", tone: "live" },
+  needs_session: { icon: Lock, title: "Only the site's own player can load this video" },
+  needs_login: { icon: Lock, title: "This page needs a sign-in" },
+  forbidden: { icon: Lock, title: "Access to the video was refused" },
+  expired: { icon: Clock, title: "This video link has expired" },
+  live: { icon: Clock, title: "Live stream, not downloadable" },
+  bot_check: { icon: ShieldCheck, title: "The site blocked automated access" },
+  unsupported: { icon: SearchX, title: "This video format isn't supported" },
+  not_media: { icon: SearchX, title: "That link isn't a video we can read" },
+  blocked: { icon: Lock, title: "That address isn't allowed" },
+  no_video: { icon: SearchX, title: "No video found on this page" },
+};
+
+function NoSource({ result }) {
+  const { url } = result;
+  const reason = result.reason || (result.drm ? "drm" : "no_video");
+  const copy = NO_SOURCE_COPY[reason] ?? NO_SOURCE_COPY.no_video;
+  const Icon = copy.icon;
+  const drm = copy.tone === "live";
+  const message =
+    result.message ||
+    (result.drm
+      ? "It's locked by the provider, so it can't be downloaded or played outside their site."
+      : "No video was found on this page. If this is a show or movie listing, open the original site, choose an episode and server, wait for its player page to load, then paste that page's URL here. You can also paste a direct video link. Some sites don't make their video available for detection.");
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -281,12 +348,13 @@ function NoSource({ drm, url }) {
           <Icon className="size-[18px]" />
         </span>
         <div>
-          <p className="font-semibold">{drm ? "This video is DRM-protected" : "No video found on this page"}</p>
-          <p className="mt-1 text-sm leading-relaxed text-mist-500">
-            {drm
-              ? "It's locked by the provider, so it can't be downloaded or played outside their site."
-              : "No video was found on this page. If this is a show or movie listing, open the original site, choose an episode and server, wait for its player page to load, then paste that page's URL here. You can also paste a direct video link. Some sites don't make their video available for detection."}
-          </p>
+          <p className="font-semibold">{copy.title}</p>
+          <p className="mt-1 text-sm leading-relaxed text-mist-500">{message}</p>
+          {result.checked?.candidates > 0 && (
+            <p className="mt-2 font-mono text-[11px] text-mist-700">
+              {result.checked.candidates} possible video {result.checked.candidates === 1 ? "address" : "addresses"} checked
+            </p>
+          )}
         </div>
       </div>
       <a

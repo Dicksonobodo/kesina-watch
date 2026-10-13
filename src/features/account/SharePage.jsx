@@ -8,6 +8,6 @@ export function SharePage() {
   const [params] = useSearchParams();
   const raw = params.get("url") || params.get("text") || "";
   const link = raw.match(/https?:\/\/\S+/)?.[0];
-  if (!link) return <Navigate to="/" replace />;
-  return <Navigate to={`/?u=${encodeURIComponent(link)}`} replace />;
+  if (!link) return <Navigate to="/live" replace />;
+  return <Navigate to={`/live?u=${encodeURIComponent(link)}`} replace />;
 }

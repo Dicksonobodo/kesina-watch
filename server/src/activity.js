@@ -1,3 +1,5 @@
+import { redactUrl } from "./log.js";
+
 /*
  * Live activity for the admin dashboard, kept in memory:
  * - presence: who is online right now and what they are doing (each tab checks in every 30s)
@@ -74,7 +76,7 @@ export function recordDetection({ ok, title, url, ms, user }) {
   rollDay();
   if (ok) today.detections++;
   else today.failedDetections++;
-  pushEvent(ok ? "detect" : "detect-fail", ok ? `${displayName(user)} detected ${short(title)}` : `Detection failed: ${short(url, 60)}`, { ms });
+  pushEvent(ok ? "detect" : "detect-fail", ok ? `${displayName(user)} detected ${short(title)}` : `Detection failed: ${short(redactUrl(url), 60)}`, { ms });
 }
 
 export function recordClientError(message) {

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CalendarPlus, ChevronRight, Newspaper, RefreshCw, Trophy, Tv } from "lucide-react";
+import { CalendarPlus, ChevronRight, ListOrdered, Newspaper, RefreshCw, Trophy, Tv } from "lucide-react";
 import { LiveDot } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/cn";
 import { reportError } from "@/lib/monitoring";
 import { MatchCentre } from "./MatchCentre";
 import { LeagueLeaders } from "./LeagueLeaders";
+import { PlayerSheet, TeamSheet } from "./Sheets";
+import { SearchBox, StandingsView } from "./SportsExtras";
 import { BallIcon } from "@/components/ui/BallIcon";
 
 // Served by Vercel functions on the same site (api/sports/*), independent of the detection server.
@@ -33,10 +35,13 @@ const DAYS = [
 const dayLabel = (d) => d.label ?? new Date(Date.now() + d.day * 86_400_000).toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
 const kickoffTime = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
-/** Football: live scores, fixtures, results, where to watch, and news. */
+/** Live scores, fixtures, results, tables and stats for football and other sports, with search. */
 export function SportsPage() {
+  const [sport, setSport] = useState("football");
   const [day, setDay] = useState(0);
   const [league, setLeague] = useState("all");
+  const [view, setView] = useState("matches"); // matches | table
+  const [sheet, setSheet] = useState(null); // { kind: "team" | "player", league, id, name }
   const [data, setData] = useState(null);
   const [news, setNews] = useState(null);
   const [error, setError] = useState("");
@@ -50,7 +55,7 @@ export function SportsPage() {
     const load = async () => {
       setRefreshing(true);
       try {
-        const next = await getJson(`/api/sports/matches?day=${day}`);
+        const next = await getJson(`/api/sports/matches?day=${day}&sport=${sport}`);
         if (!cancelled) {
           setData(next);
           setError("");
@@ -69,7 +74,7 @@ export function SportsPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [day]);
+  }, [day, sport]);
 
   useEffect(() => {
     getJson("/api/sports/news")
@@ -80,7 +85,33 @@ export function SportsPage() {
       });
   }, []);
 
-  const leagues = data?.leagues ?? [];
+  const sports = data?.sports ?? [{ id: "football", name: "Football" }];
+  const leagues = useMemo(() => {
+    // Competitions with games on this day come first.
+    const list = data?.leagues ?? [];
+    return [...list].sort((a, b) => Number(b.count > 0) - Number(a.count > 0));
+  }, [data]);
+  const current = leagues.find((l) => l.id === league);
+  // The table and leaders need one competition: the picked one, or the first with games.
+  const focusLeague = current ?? leagues[0];
+  const isFootball = sport === "football";
+  // The table is for one competition, so show which one even when "All" is picked.
+  const shownLeague = view === "table" ? focusLeague?.id ?? league : league;
+
+  function changeSport(next) {
+    if (next === sport) return;
+    setSport(next);
+    setLeague("all");
+    setView("matches");
+    setData(null);
+  }
+
+  function openCompetition(c) {
+    if (c.sport !== sport) setData(null);
+    setSport(c.sport);
+    setLeague(c.id);
+    setView("matches");
+  }
   const matches = useMemo(() => (data?.matches ?? []).filter((m) => league === "all" || m.league === league), [data, league]);
   const live = matches.filter((m) => m.state === "in");
   const rest = matches.filter((m) => m.state !== "in");
@@ -96,9 +127,9 @@ export function SportsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Football"
+        eyebrow={sports.find((x) => x.id === sport)?.name ?? "Sports"}
         title="Sports"
-        description="Live scores, fixtures and results from the top leagues, where to watch each match officially, and the latest football news."
+        description="Live scores, fixtures, tables and stats across football, basketball, NFL, baseball and hockey, with where to watch each match."
         action={
           data?.live > 0 && (
             <span className="inline-flex items-center gap-2 self-start rounded-full bg-live/10 px-3.5 py-2 font-mono text-xs font-medium text-live ring-1 ring-live/30 sm:self-auto">
@@ -108,22 +139,46 @@ export function SportsPage() {
         }
       />
 
-      {/* Day + league pickers */}
-      <div className="mt-8 space-y-3">
-        <Chips value={day} onChange={setDay} options={DAYS.map((d) => ({ value: d.day, label: dayLabel(d) }))} layoutId="sports-day" />
+      <div className="mt-6">
+        <SearchBox
+          matches={data?.matches}
+          onCompetition={openCompetition}
+          onMatch={(m) => setOpen(m)}
+          onTeam={(t) => setSheet({ kind: "team", league: t.league, id: t.id, name: t.name })}
+          onPlayer={(p) => setSheet({ kind: "player", league: p.league, id: p.id, name: p.name })}
+        />
+      </div>
+
+      {/* Sport, competition, view and day pickers */}
+      <div className="mt-5 space-y-3">
+        <Chips value={sport} onChange={changeSport} options={sports.map((x) => ({ value: x.id, label: x.name }))} layoutId="sports-sport" />
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-          {[{ id: "all", short: "All leagues" }, ...leagues].map((l) => (
+          {[{ id: "all", short: "All", count: data?.matches?.length ?? 0 }, ...leagues].map((l) => (
             <button
               key={l.id}
               onClick={() => setLeague(l.id)}
               className={cn(
-                "h-8 shrink-0 rounded-full px-3.5 text-[12.5px] font-semibold ring-1 transition",
-                league === l.id ? "bg-signal/10 text-signal ring-signal/50" : "text-mist-500 ring-white/10 hover:text-mist-100",
+                "flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-semibold ring-1 transition",
+                shownLeague === l.id ? "bg-signal/10 text-signal ring-signal/50" : "text-mist-500 ring-white/10 hover:text-mist-100",
+                shownLeague !== l.id && l.count === 0 && l.id !== "all" && "opacity-60",
               )}
             >
               {l.short}
+              {l.count > 0 && <span className="rounded-full bg-white/10 px-1.5 font-mono text-[10px] text-mist-300">{l.count}</span>}
             </button>
           ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Chips
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "matches", label: "Matches" },
+              { value: "table", label: "Table" },
+            ]}
+            layoutId="sports-view"
+          />
+          {view === "matches" && <Chips value={day} onChange={setDay} options={DAYS.map((d) => ({ value: d.day, label: dayLabel(d) }))} layoutId="sports-day" />}
         </div>
       </div>
 
@@ -131,9 +186,22 @@ export function SportsPage() {
         <p className="mt-6 rounded-2xl bg-live/[.08] px-4 py-3 text-sm text-live ring-1 ring-live/25">{error}</p>
       )}
 
+      {view === "table" && (
+        <section className="mt-8">
+          <h2 className="mb-3 flex items-center gap-2 font-mono text-[11px] font-medium tracking-[.22em] text-mist-500 uppercase">
+            <ListOrdered className="size-3.5" /> {focusLeague ? `${focusLeague.name} table` : "Table"}
+          </h2>
+          {focusLeague ? (
+            <StandingsView key={focusLeague.id} league={focusLeague.id} leagueName={focusLeague.name} onTeam={(id) => setSheet({ kind: "team", league: focusLeague.id, id })} />
+          ) : (
+            <div className="skeleton h-96 rounded-3xl" />
+          )}
+        </section>
+      )}
+
       {/* Live now */}
       <AnimatePresence>
-        {live.length > 0 && (
+        {view === "matches" && live.length > 0 && (
           <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-8">
             <h2 className="mb-3 flex items-center gap-2 font-mono text-[11px] font-medium tracking-[.22em] text-live uppercase">
               <LiveDot /> Live now
@@ -148,7 +216,7 @@ export function SportsPage() {
       </AnimatePresence>
 
       {/* Fixtures & results */}
-      <section className="mt-8">
+      <section className={cn("mt-8", view !== "matches" && "hidden")}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-mono text-[11px] font-medium tracking-[.22em] text-mist-500 uppercase">{day < 0 ? "Results" : "Fixtures & results"}</h2>
           {refreshing && data && <RefreshCw className="size-3.5 animate-spin text-mist-700" />}
@@ -185,10 +253,10 @@ export function SportsPage() {
         </p>
       </section>
 
-      <LeagueLeaders preferred={league === "all" ? "eng.1" : league} />
+      {isFootball && focusLeague && <LeagueLeaders key={focusLeague.id} league={focusLeague.id} leagueName={focusLeague.name} />}
 
       {/* News */}
-      <section className="mt-12">
+      <section className={cn("mt-12", !isFootball && "hidden")}>
         <h2 className="mb-4 flex items-center gap-2 font-display text-xl font-bold tracking-tight">
           <Newspaper className="size-5 text-signal" /> Football news
         </h2>
@@ -208,6 +276,21 @@ export function SportsPage() {
       </section>
 
       <AnimatePresence>{open && <MatchCentre match={open} onClose={() => setOpen(null)} />}</AnimatePresence>
+      <AnimatePresence>
+        {sheet?.kind === "team" && (
+          <TeamSheet key={`t${sheet.id}`} league={sheet.league} id={sheet.id} onClose={() => setSheet(null)} onOpenPlayer={(p) => setSheet({ kind: "player", league: sheet.league, id: p.id, name: p.name })} />
+        )}
+        {sheet?.kind === "player" && (
+          <PlayerSheet
+            key={`p${sheet.id}`}
+            league={sheet.league}
+            id={sheet.id}
+            name={sheet.name}
+            onClose={() => setSheet(null)}
+            onOpenTeam={(id) => setSheet({ kind: "team", league: sheet.league, id })}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

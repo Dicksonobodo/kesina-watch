@@ -5,6 +5,8 @@ import { X } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { paletteFor } from "@/lib/palette";
 import { cn } from "@/lib/cn";
+import { usePlayerPhoto } from "./photos";
+import { CompareSheet, ComparePicker, DetailedStats } from "./PlayerStats";
 
 /*
  * Panels that open on top of Sports / the match centre: player profile, team page and the
@@ -71,13 +73,21 @@ export function Crest({ src, name = "", className }) {
   return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} className={cn("shrink-0 object-contain", className)} />;
 }
 
-// ESPN's free feed has no player photos: a designed badge with initials and shirt number.
-export function PlayerBadge({ name = "", jersey, className }) {
+// A portrait when we can find one (see photos.js); otherwise a designed badge with initials
+// and shirt number. `photo` is used as-is when the feed already supplied one.
+export function PlayerBadge({ name = "", team = "", jersey, photo, className }) {
+  const found = usePlayerPhoto(photo ? "" : name, team);
+  const [broken, setBroken] = useState(false);
+  const src = !broken ? photo || found : null;
   const [a, b] = paletteFor(name);
   const initials = name.split(" ").filter(Boolean).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   return (
     <span className={cn("relative grid shrink-0 place-items-center rounded-2xl font-display font-bold text-white", className)} style={{ background: `linear-gradient(135deg, ${a}, ${b})` }}>
-      {initials}
+      {src ? (
+        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} className="size-full rounded-[inherit] object-cover object-top" />
+      ) : (
+        initials
+      )}
       {jersey && <span className="absolute -right-1.5 -bottom-1.5 grid min-w-6 place-items-center rounded-full bg-ink-950 px-1 font-mono text-[10px] text-mist-100 ring-2 ring-ink-900">{jersey}</span>}
     </span>
   );
@@ -94,6 +104,8 @@ const Loading = () => (
 /** matchStats: [{label, value}] when opened from a match's line-ups. */
 export function PlayerSheet({ league, id, name, jersey, matchStats, onClose, onOpenTeam }) {
   const { data, error } = useApi(`/api/sports/player?league=${encodeURIComponent(league)}&id=${encodeURIComponent(id)}`);
+  const [picking, setPicking] = useState(false);
+  const [versus, setVersus] = useState(null); // the player chosen to compare with
   const p = data ?? { name, jersey };
   const facts = data
     ? [
@@ -111,7 +123,7 @@ export function PlayerSheet({ league, id, name, jersey, matchStats, onClose, onO
     <Sheet onClose={onClose} label={p.name || "Player"}>
       <div className="p-6">
         <div className="flex items-center gap-4">
-          {p.photo ? <img src={p.photo} alt="" className="size-16 rounded-2xl object-cover" /> : <PlayerBadge name={p.name} jersey={p.jersey} className="size-16 text-xl" />}
+          <PlayerBadge name={p.name} team={data?.team ?? ""} jersey={p.jersey} photo={p.photo} className="size-16 text-xl" />
           <div className="min-w-0">
             <p className="truncate font-display text-2xl font-bold tracking-tight">{p.name}</p>
             {data?.team && (
@@ -158,6 +170,8 @@ export function PlayerSheet({ league, id, name, jersey, matchStats, onClose, onO
           </section>
         )}
 
+        {data && <DetailedStats key={id} league={league} id={id} name={p.name || name} team={data.team} onCompare={() => setPicking(true)} />}
+
         {facts.length > 0 && (
           <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
             {facts.map(([k, v]) => (
@@ -169,6 +183,8 @@ export function PlayerSheet({ league, id, name, jersey, matchStats, onClose, onO
           </dl>
         )}
       </div>
+      {picking && <ComparePicker league={league} exclude={id} onClose={() => setPicking(false)} onPick={(p) => (setPicking(false), setVersus(p))} />}
+      {versus && <CompareSheet a={{ league, id, name: p.name || name }} b={{ league: versus.league, id: versus.id, name: versus.name }} onClose={() => setVersus(null)} />}
     </Sheet>
   );
 }
@@ -238,7 +254,7 @@ export function TeamSheet({ league, id, onClose, onOpenPlayer }) {
                   <div className="grid gap-1.5 sm:grid-cols-2">
                     {g.players.map((p) => (
                       <button key={p.id} onClick={() => onOpenPlayer?.(p)} className="flex items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/[.04]">
-                        <PlayerBadge name={p.name} jersey={p.jersey} className="size-9 text-xs" />
+                        <PlayerBadge name={p.name} team={data.name} jersey={p.jersey} photo={p.photo} className="size-9 text-xs" />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">{p.name}</span>
                           <span className="block truncate text-[11px] text-mist-500">{[p.nationality, p.age && `${p.age} yrs`].filter(Boolean).join(" · ")}</span>

@@ -1,4 +1,4 @@
-import { canRelay, relayUrl } from "@/features/downloads/engine/fetcher";
+import { canRelay, relayUrl } from "@/lib/relay";
 
 /*
  * Subtitle files found on the page (.vtt / .srt). Browsers only show WebVTT and need it

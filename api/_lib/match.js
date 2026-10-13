@@ -1,4 +1,4 @@
-import { cached, getJson } from "./sports.js";
+import { cached, getJson, leagueById } from "./sports.js";
 
 /*
  * Match centre for one game (ESPN summary feed): score, timeline of goals / cards / subs,
@@ -66,6 +66,19 @@ const STAT_ROWS = [
   ["saves", "Saves"],
 ];
 
+// Other sports: every team statistic that is a plain number, with ESPN's own labels.
+function genericStats(hs, as) {
+  const out = [];
+  for (const h of hs) {
+    const a = as.find((s) => s.name === h.name);
+    const hv = parseFloat(String(h.displayValue).replace(/[%,]/g, ""));
+    const av = parseFloat(String(a?.displayValue ?? "").replace(/[%,]/g, ""));
+    if (!a || Number.isNaN(hv) || Number.isNaN(av) || !/^-?[\d.,]+%?$/.test(String(h.displayValue)) || out.length >= 14) continue;
+    out.push({ key: h.name, label: h.label || h.name, unit: String(h.displayValue).endsWith("%") ? "%" : "", home: String(hv), away: String(av) });
+  }
+  return out;
+}
+
 function eventKind(type = "") {
   if (/own goal/i.test(type)) return "own-goal";
   if (/penalty.*(missed|saved)/i.test(type)) return "pen-miss";
@@ -79,9 +92,11 @@ function eventKind(type = "") {
 
 /** Everything for one match: score, timeline, line-ups / formations, stats, table. */
 export async function getMatch({ league, id }) {
-  if (!/^[\w.]+$/.test(league) || !/^\d+$/.test(id)) throw new Error("bad match id");
+  const info = leagueById(league);
+  if (!info || !/^\d+$/.test(id)) throw new Error("bad match id");
+  const football = info.sport === "football";
   return cached(`match:${league}:${id}`, 60_000, async () => {
-    const j = await getJson(`https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/summary?event=${id}`);
+    const j = await getJson(`https://site.api.espn.com/apis/site/v2/sports/${info.path}/summary?event=${id}`);
     const comp = j.header?.competitions?.[0] ?? {};
     const side = (ha) => comp.competitors?.find((c) => c.homeAway === ha) ?? {};
     const home = side("home");
@@ -114,7 +129,7 @@ export async function getMatch({ league, id }) {
     const statsFor = (teamId) => j.boxscore?.teams?.find((t) => t.team?.id === teamId)?.statistics ?? [];
     const hs = statsFor(home.team?.id);
     const as = statsFor(away.team?.id);
-    const stats = STAT_ROWS.map(([key, label, unit]) => {
+    const stats = !football ? genericStats(hs, as) : STAT_ROWS.map(([key, label, unit]) => {
       const h = hs.find((s) => s.name === key)?.displayValue;
       const a = as.find((s) => s.name === key)?.displayValue;
       if (h == null && a == null) return null;
@@ -123,12 +138,12 @@ export async function getMatch({ league, id }) {
       return { key, label, unit: unit ?? "", home: pct(h ?? 0), away: pct(a ?? 0) };
     }).filter(Boolean);
 
-    const lineups = {
+    const lineups = !football ? { home: null, away: null } : {
       home: mapLineup(j.rosters?.find((r) => r.homeAway === "home")),
       away: mapLineup(j.rosters?.find((r) => r.homeAway === "away")),
     };
 
-    const rows = j.standings?.groups?.[0]?.standings?.entries ?? [];
+    const rows = football ? (j.standings?.groups?.[0]?.standings?.entries ?? []) : [];
     const statOf = (row, name) => row.stats?.find((s) => s.name === name)?.displayValue ?? "";
     const table = rows.map((row) => ({
       rank: Number(statOf(row, "rank")) || null,
@@ -142,6 +157,7 @@ export async function getMatch({ league, id }) {
     const value = {
       id,
       league,
+      sport: info.sport,
       state,
       clock: comp.status?.displayClock ?? null,
       detail: comp.status?.type?.shortDetail ?? comp.status?.type?.detail ?? "",
@@ -158,10 +174,16 @@ export async function getMatch({ league, id }) {
       broadcasters: [...new Set((j.broadcasts ?? []).map((b) => b.media?.shortName).filter(Boolean))].slice(0, 4),
 
       // Minute-by-minute text, newest first.
-      commentary: (j.commentary ?? [])
-        .filter((c) => c.text)
-        .map((c) => ({ clock: c.time?.displayValue ?? "", text: c.text, type: c.play?.type?.text ?? "" }))
-        .reverse(),
+      commentary: football
+        ? (j.commentary ?? [])
+            .filter((c) => c.text)
+            .map((c) => ({ clock: c.time?.displayValue ?? "", text: c.text, type: c.play?.type?.text ?? "" }))
+            .reverse()
+        : (j.plays ?? [])
+            .filter((p) => p.text && p.scoringPlay)
+            .slice(-60)
+            .map((p) => ({ clock: [p.period?.displayValue, p.clock?.displayValue].filter(Boolean).join(" "), text: p.text, type: p.type?.text ?? "" }))
+            .reverse(),
 
       // Official highlight clips (ESPN). Plain MP4 plays straight in a <video>.
       highlights: (j.videos ?? [])

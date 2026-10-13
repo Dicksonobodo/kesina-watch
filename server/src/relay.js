@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
-import { config, USER_AGENT } from "./config.js";
+import { config } from "./config.js";
 import { createSlots } from "./limits.js";
-import { assertPublicUrl, HttpError } from "./safety.js";
+import { safeFetch } from "./net.js";
+import { HttpError } from "./safety.js";
 
 /*
  * The relay fetches a video file / stream piece on the user's behalf, for sources that
@@ -12,9 +13,6 @@ import { assertPublicUrl, HttpError } from "./safety.js";
 
 const SECRET = process.env.RELAY_SECRET || crypto.randomBytes(32).toString("hex");
 const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
-const HOST_OK_TTL_MS = 5 * 60 * 1000;
-const okHosts = new Map();
-const MAX_OK_HOSTS = 2000;
 // One person can't use up the server: a few parallel streams each, and an overall ceiling.
 const slots = createSlots({ perUser: config.relayPerUser, total: config.relayTotal });
 
@@ -40,16 +38,6 @@ function verifyToken(token) {
   } catch {
     return null;
   }
-}
-
-// A movie has thousands of pieces; only resolve DNS for each host every few minutes.
-async function assertPublicCached(url) {
-  const host = new URL(url).hostname;
-  const at = okHosts.get(host);
-  if (at && Date.now() - at < HOST_OK_TTL_MS) return;
-  await assertPublicUrl(url);
-  if (okHosts.size >= MAX_OK_HOSTS) okHosts.delete(okHosts.keys().next().value);
-  okHosts.set(host, Date.now());
 }
 
 // Pages, not media: stops the relay being used to browse arbitrary websites.
@@ -79,11 +67,27 @@ export function rewritePlaylist(text, baseUrl, wrap) {
 
 const PASS_HEADERS = ["content-type", "content-length", "content-range", "accept-ranges", "last-modified", "etag"];
 
-export async function relayHandler(req, res) {
-  const claims = verifyToken(req.query.t);
-  if (!claims) return res.status(401).json({ error: "This download link expired. Detect the movie again." });
+/*
+ * Mirror form, for DASH players: /relay/m/<token>/<scheme>/<host>/<path>?<query> mirrors the
+ * real address, so relative segment addresses in a manifest (seg-1.m4s, ../video/x.m4s)
+ * resolve back into the relay by themselves.
+ */
+const MIRROR_RE = /^\/relay\/m\/([^/]+)\/(https?)\/([^/]+)\/(.*)$/;
+export function relayMirrorHandler(req, res) {
+  const m = req.path.match(MIRROR_RE);
+  if (!m) return res.status(400).json({ error: "Bad relay address." });
+  const raw = req.originalUrl;
+  const query = raw.includes("?") ? raw.slice(raw.indexOf("?")) : "";
+  req.relay = { token: m[1], target: `${m[2]}://${m[3]}/${m[4]}${query}` };
+  return relayHandler(req, res);
+}
 
-  const target = typeof req.query.url === "string" ? req.query.url : "";
+export async function relayHandler(req, res) {
+  const claims = verifyToken(req.relay?.token ?? req.query.t);
+  if (!claims) return res.status(401).json({ error: "This download link expired. Analyze the link again." });
+
+  const target = req.relay?.target ?? (typeof req.query.url === "string" ? req.query.url : "");
+  if (!target || target.length > 4096) return res.status(400).json({ error: "Missing video address." });
   const release = slots(claims.u, claims.p ? config.relayPerUser * 2 : config.relayPerUser);
   if (!release) {
     res.setHeader("Retry-After", "2");
@@ -96,20 +100,28 @@ export async function relayHandler(req, res) {
   });
 
   try {
-    await assertPublicCached(target);
-    const upstream = await fetch(target, {
+    // safeFetch refuses private addresses at connect time and re-checks every redirect hop,
+    // so the relay can't be pointed at the server's own network.
+    const upstream = await safeFetch(target, {
       headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "*/*",
         ...(claims.r ? { Referer: claims.r, Origin: new URL(claims.r).origin } : {}),
         ...(req.headers.range ? { Range: req.headers.range } : {}),
+        // Uncompressed, so byte counts and ranges match what the browser receives.
+        "Accept-Encoding": "identity",
       },
-      redirect: "follow",
       signal: controller.signal,
+      timeoutMs: 0, // long movies are fine; a stalled source is cut off by the idle timeout
     });
     if (!upstream.ok) {
       upstream.body?.cancel().catch(() => {});
-      throw new HttpError(502, `The video source answered ${upstream.status}.`);
+      // Pass expiry / not-found through so the download engine can explain it.
+      const status = [401, 403, 404, 410].includes(upstream.status) ? upstream.status : 502;
+      throw new HttpError(status, `The video source answered ${upstream.status}.`);
+    }
+    const total = Number(upstream.headers.get("content-range")?.split("/")[1]) || Number(upstream.headers.get("content-length")) || 0;
+    if (total > config.maxDownloadBytes) {
+      upstream.body?.cancel().catch(() => {});
+      throw new HttpError(413, `This file is larger than the ${Math.round(config.maxDownloadBytes / 1024 ** 3)} GB limit.`);
     }
 
     const reader = upstream.body.getReader();
@@ -120,7 +132,7 @@ export async function relayHandler(req, res) {
     }
 
     // Playlists for the player: point every piece / key / sub-playlist back through the relay.
-    if (req.query.rw === "1" && first.value && isPlaylist(first.value)) {
+    if (!req.relay && req.query.rw === "1" && first.value && isPlaylist(first.value)) {
       const parts = [first.value];
       let size = first.value.byteLength;
       for (;;) {
@@ -139,12 +151,14 @@ export async function relayHandler(req, res) {
     }
 
     res.status(upstream.status);
+    // The body arrives decompressed; a compressed Content-Length would cut it short.
+    const encoded = Boolean(upstream.headers.get("content-encoding"));
     for (const name of PASS_HEADERS) {
       const value = upstream.headers.get(name);
-      if (value) res.setHeader(name, value);
+      if (value && !(encoded && name === "content-length")) res.setHeader(name, value);
     }
     res.setHeader("Cache-Control", "no-store");
-    if (typeof req.query.dl === "string" && req.query.dl) {
+    if (!req.relay && typeof req.query.dl === "string" && req.query.dl) {
       res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(req.query.dl)}`);
     }
 

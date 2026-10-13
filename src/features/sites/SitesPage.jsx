@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ExternalLink, Film, Link2, Pin, Plus, Radio, Trash2, Type } from "lucide-react";
+import { ExternalLink, Link2, Pin, Plus, Radio, Trash2, Type } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { Badge, LiveDot } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,10 +13,11 @@ import { paletteFor } from "@/lib/palette";
 import { idFromUrl, putItem, removeItem, useUserCollection } from "@/lib/userData";
 import { cn } from "@/lib/cn";
 
-/** Pinned pages (a live channel, a concert page, a movie page) in users/{uid}/sites. */
+/** Pinned live pages (a channel, a concert page) in users/{uid}/sites. */
 export function SitesPage() {
   const { user } = useAuth();
-  const { items: sites, loading } = useUserCollection(user?.uid, "sites");
+  const { items: allSites, loading } = useUserCollection(user?.uid, "sites");
+  const sites = allSites.filter((s) => s.kind === "live");
   const [adding, setAdding] = useState(false);
 
   return (
@@ -58,7 +59,7 @@ export function SitesPage() {
 
       {!loading && sites.length === 0 && (
         <p className="mt-6 max-w-lg text-sm text-mist-500">
-          Tip: pin the exact page where the player is (the channel or episode page), not the site&apos;s home page. You can also pin a live stream straight from its result with the pin button.
+          Tip: pin the exact page where the live player is (the channel or event page), not the site&apos;s home page. You can also pin a live stream straight from its result with the pin button.
         </p>
       )}
 
@@ -75,8 +76,7 @@ export function SiteTile({ site, uid }) {
 
   function open() {
     putItem(uid, "sites", site.id, { lastVisited: Date.now() }).catch(() => {});
-    // Live channels open in the Live tab; movie sites open in Browse (poster grid, no ads).
-    navigate(site.kind === "live" ? `/live?u=${encodeURIComponent(site.url)}` : `/browse?site=${encodeURIComponent(site.url)}`);
+    navigate(`/live?u=${encodeURIComponent(site.url)}`);
   }
 
   return (
@@ -99,7 +99,7 @@ export function SiteTile({ site, uid }) {
         <div className="absolute inset-0 flex flex-col justify-between p-4">
           <div className="flex items-start justify-between">
             <span className="grid size-10 place-items-center rounded-xl bg-black/30 ring-1 ring-white/10 backdrop-blur">
-              {site.kind === "live" ? <Radio className="size-5" /> : <Film className="size-5" />}
+              <Radio className="size-5" />
             </span>
             {site.kind === "live" && (
               <Badge tone="live" className="!bg-black/60 !text-white !ring-white/15 backdrop-blur">
@@ -142,10 +142,9 @@ export function SiteTile({ site, uid }) {
   );
 }
 
-export function AddSiteDialog({ open, onClose, uid, defaultKind = "live", title = "Pin a page" }) {
+export function AddSiteDialog({ open, onClose, uid, title = "Pin a page" }) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
-  const [kind, setKind] = useState(defaultKind);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -162,7 +161,7 @@ export function AddSiteDialog({ open, onClose, uid, defaultKind = "live", title 
     if (!isHttpUrl(link)) return setError("Paste a full link that starts with http:// or https://");
     setSaving(true);
     try {
-      await pinSite(uid, { url: link, name: name.trim() || prettyHost(link), kind });
+      await pinSite(uid, { url: link, name: name.trim() || prettyHost(link), kind: "live" });
       close();
     } catch (err) {
       setError(err.message || "Couldn't pin that page.");
@@ -187,25 +186,6 @@ export function AddSiteDialog({ open, onClose, uid, defaultKind = "live", title 
           autoFocus
         />
         <Field id="site-name" icon={Type} placeholder={prettyHost(url) || "Name (optional)"} value={name} onChange={(e) => setName(e.target.value)} />
-
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { id: "live", label: "Live stream", icon: Radio },
-            { id: "movies", label: "Movies & shows", icon: Film },
-          ].map((k) => (
-            <button
-              type="button"
-              key={k.id}
-              onClick={() => setKind(k.id)}
-              className={cn(
-                "flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-semibold ring-1 transition",
-                kind === k.id ? "bg-signal/[.08] text-signal ring-signal/60" : "bg-white/[.03] text-mist-300 ring-white/[.08] hover:bg-white/[.06]",
-              )}
-            >
-              <k.icon className="size-4" /> {k.label}
-            </button>
-          ))}
-        </div>
 
         {error && <p className="text-[13px] text-live">{error}</p>}
 

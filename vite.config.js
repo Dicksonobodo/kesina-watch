@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -15,7 +15,14 @@ function vercelApiInDev() {
           const mod = await server.ssrLoadModule(`/api/${path.slice(5)}.js`);
           const handler = mod[req.method];
           if (!handler) return next();
-          const response = await handler(new Request(`http://${req.headers.host}${req.url}`, { method: req.method, headers: req.headers }));
+          // POST bodies (the games API) have to be read from the Node request first.
+          let body;
+          if (req.method !== "GET" && req.method !== "HEAD") {
+            const chunks = [];
+            for await (const chunk of req) chunks.push(chunk);
+            body = Buffer.concat(chunks);
+          }
+          const response = await handler(new Request(`http://${req.headers.host}${req.url}`, { method: req.method, headers: req.headers, body }));
           res.statusCode = response.status;
           response.headers.forEach((value, key) => res.setHeader(key, value));
           res.end(Buffer.from(await response.arrayBuffer()));
@@ -29,7 +36,16 @@ function vercelApiInDev() {
   };
 }
 
-export default defineConfig({
+// The API functions in api/ read server-side secrets from process.env,
+// the way Vercel provides them. Vite only exposes VITE_* to the browser, so load .env into the
+// dev server's process for them.
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  for (const [key, value] of Object.entries(env)) if (!(key in process.env)) process.env[key] = value;
+  return config;
+});
+
+const config = {
   plugins: [react(), tailwindcss(), vercelApiInDev()],
   define: {
     // Tags error reports with the deployed commit on Vercel.
@@ -56,4 +72,4 @@ export default defineConfig({
       },
     },
   },
-});
+};

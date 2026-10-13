@@ -15,8 +15,14 @@ const PRIVATE_V4 = [
   ["127.0.0.0", 8],
   ["169.254.0.0", 16],
   ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
   ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
   ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
 ];
 
 function v4ToInt(ip) {
@@ -30,7 +36,18 @@ export function isPrivateIp(ip) {
   }
   const v6 = ip.toLowerCase();
   if (v6.startsWith("::ffff:")) return isPrivateIp(v6.slice(7));
-  return v6 === "::" || v6 === "::1" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
+  // NAT64 (64:ff9b::a.b.c.d) can wrap a private IPv4 address.
+  const nat64 = v6.match(/^64:ff9b::(\d+\.\d+\.\d+\.\d+)$/);
+  if (nat64) return isPrivateIp(nat64[1]);
+  return (
+    v6 === "::" ||
+    v6 === "::1" ||
+    v6.startsWith("fc") ||
+    v6.startsWith("fd") ||
+    /^fe[89ab]/.test(v6) || // link-local
+    v6.startsWith("ff") || // multicast
+    v6.startsWith("2001:db8") // documentation
+  );
 }
 
 // Cheap check used on every browser request (no DNS lookup).

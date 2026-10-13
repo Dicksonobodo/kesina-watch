@@ -53,5 +53,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/games.js": {
+      "maxDuration": 30
+    }
+  }
 }
