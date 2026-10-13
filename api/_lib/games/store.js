@@ -54,6 +54,9 @@ function memoryBackend() {
     async delete(path) {
       docs.delete(path);
     },
+    async count(collection, where = []) {
+      return (await this.list(collection, { where, limit: 1_000_000 })).length;
+    },
     // Compare-and-set: applies `patch` only if every field in `expected` still has that value.
     async cas(path, expected, patch) {
       const cur = docs.get(path);
@@ -126,6 +129,12 @@ async function firestoreBackend() {
     },
     async delete(path) {
       return ref(path).delete();
+    },
+    // Counts without reading the documents (one cheap aggregate read per 1000 matches).
+    async count(collection, where = []) {
+      let q = db.collection(collection);
+      for (const [field, op, value] of where) q = q.where(field, op, value);
+      return (await q.count().get()).data().count;
     },
     async cas(path, expected, patch) {
       return db.runTransaction(async (tx) => {

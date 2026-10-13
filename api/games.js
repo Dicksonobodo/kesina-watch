@@ -7,6 +7,7 @@ import { answerRoom, cancelRoom, createRoom, friendsRanking, getRoom, joinRoom, 
 import { COMPETITIONS, createLeague, fixtures, joinLeague, leaveLeague, myLeagues, myPredictions, place, settle } from "./_lib/games/predictor.js";
 import { decideQuestion, pendingQuestions, reportQuestion, submitQuestion } from "./_lib/games/questions.js";
 import { usesFirestore } from "./_lib/games/store.js";
+import { adminStats } from "./_lib/games/adminstats.js";
 import { parseServiceAccount, projectIdFromEnv } from "./_lib/games/admin.js";
 import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
 
@@ -73,6 +74,10 @@ const ACTIONS = {
   "q.pending": async (who) => {
     if (!who.admin) throw new GameError("Admins only.", 403);
     return { questions: await pendingQuestions() };
+  },
+  "admin.stats": async (who) => {
+    if (!who.admin) throw new GameError("Admins only.", 403);
+    return { ...(await adminStats()), store: usesFirestore() ? "firestore" : "memory" };
   },
   "q.decide": async (who, b) => {
     if (!who.admin) throw new GameError("Admins only.", 403);

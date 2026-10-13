@@ -30,8 +30,8 @@ export function AppShell() {
   useEffect(() => onSyncProblem(setSyncProblem), []);
   const online = useOnline();
   const { admin, adminServer } = useAccount();
-  // The live dashboard needs the detection server; otherwise Admin opens the question review.
-  const adminNav = { ...ADMIN_NAV, to: adminServer ? "/admin" : "/games/moderate" };
+  // The live dashboard needs the detection server; otherwise Admin opens the games dashboard.
+  const adminNav = { ...ADMIN_NAV, to: adminServer ? "/admin" : "/games/admin" };
 
   return (
     <div className="relative min-h-dvh lg:pl-72">

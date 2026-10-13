@@ -30,6 +30,7 @@ const Leaderboards = page(() => import("@/features/games/MorePages"), "Leaderboa
 const GameProfile = page(() => import("@/features/games/MorePages"), "GameProfile");
 const SubmitQuestion = page(() => import("@/features/games/MorePages"), "SubmitQuestion");
 const Moderation = page(() => import("@/features/games/MorePages"), "Moderation");
+const GamesAdmin = page(() => import("@/features/games/GamesAdmin"), "GamesAdmin");
 
 // Live is the front door; links like /?u=<page> (bookmarklet) carry on to it.
 function HomeRedirect() {
@@ -70,6 +71,7 @@ export default function App() {
                           <Route path="profile" element={<GameProfile />} />
                           <Route path="submit" element={<SubmitQuestion />} />
                           <Route path="moderate" element={<Moderation />} />
+                          <Route path="admin" element={<GamesAdmin />} />
                         </Route>
                         <Route path="sites" element={<SitesPage />} />
                         <Route path="profile" element={<ProfilePage />} />

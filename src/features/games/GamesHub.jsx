@@ -99,9 +99,14 @@ export function GamesHub() {
       </div>
 
       {profile?.admin && (
-        <Link to="/games/moderate" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-signal">
-          Review submitted questions →
-        </Link>
+        <div className="mt-6 flex flex-wrap gap-4">
+          <Link to="/games/admin" className="inline-flex items-center gap-2 text-sm font-semibold text-signal">
+            Games dashboard →
+          </Link>
+          <Link to="/games/moderate" className="inline-flex items-center gap-2 text-sm font-semibold text-signal">
+            Review submitted questions →
+          </Link>
+        </div>
       )}
     </div>
   );
