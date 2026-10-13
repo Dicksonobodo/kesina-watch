@@ -172,7 +172,7 @@ export function QuizGame({ kind }) {
 
       {phase === "intro" || phase === "loading" ? (
         <Card className="overflow-hidden text-center">
-          <GameArt id={kind === "daily" ? "daily" : kind} fit="meet" className="-mx-5 -mt-5 mb-6 h-40 sm:-mx-6 sm:-mt-6" />
+          <GameArt id={kind === "daily" ? "daily" : kind} fit="meet" className="-mx-5 -mt-5 mb-6 h-56 sm:-mx-6 sm:-mt-6" />
           <h1 className="font-display text-3xl font-extrabold tracking-tight">{info.title}</h1>
           <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-mist-500">{info.blurb}</p>
 

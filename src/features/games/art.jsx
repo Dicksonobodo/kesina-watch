@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 
 /*
- * Original artwork for each game: one picture that says what the game is. Drawn as inline SVG
- * (no image files, no licensing), tinted with the player's colour theme through --color-signal.
+ * One picture per game that says what the game is: a real photo (public/games/<id>.webp, from
+ * Unsplash, see photoCredits.js). If a photo can't load, the drawn SVG artwork below is shown
+ * instead, tinted with the player's colour theme through --color-signal.
  */
 
 const SIGNAL = "var(--color-signal)";
@@ -238,16 +240,28 @@ const ARTS = {
   },
 };
 
-/** fit="slice" fills the box (cards); fit="meet" shows the whole picture centred (wide banners). */
+/** fit only matters for the drawn fallback: "slice" fills the box, "meet" shows all of it centred. */
 export function GameArt({ id, className, fit = "slice" }) {
   const art = ARTS[id];
+  const [photoFailed, setPhotoFailed] = useState(false);
   if (!art) return null;
   return (
     <div aria-hidden className={cn("relative overflow-hidden bg-gradient-to-br", art.bg, className)}>
-      <div className="absolute -top-10 -right-10 size-40 rounded-full bg-signal/10 blur-3xl" />
-      <svg viewBox="0 0 320 160" preserveAspectRatio={`xMidYMid ${fit}`} className="relative size-full">
-        {art.svg}
-      </svg>
+      {photoFailed ? (
+        <>
+          <div className="absolute -top-10 -right-10 size-40 rounded-full bg-signal/10 blur-3xl" />
+          <svg viewBox="0 0 320 160" preserveAspectRatio={`xMidYMid ${fit}`} className="relative size-full">
+            {art.svg}
+          </svg>
+        </>
+      ) : (
+        <>
+          <img src={`/games/${id}.webp`} alt="" loading="lazy" decoding="async" onError={() => setPhotoFailed(true)} className="absolute inset-0 size-full object-cover" />
+          {/* Darkens the bottom and tints with the player's theme so the photo sits in the app's look. */}
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/75 via-ink-950/10 to-ink-950/20" />
+          <div className="absolute inset-0 bg-signal/[.07] mix-blend-soft-light" />
+        </>
+      )}
     </div>
   );
 }

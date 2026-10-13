@@ -124,7 +124,7 @@ export function GuessPlayer({ daily = false }) {
 
       {(phase === "intro" || phase === "loading") && (
         <Card className="overflow-hidden text-center">
-          <GameArt id="guess" fit="meet" className="-mx-5 -mt-5 mb-6 h-40 sm:-mx-6 sm:-mt-6" />
+          <GameArt id="guess" fit="meet" className="-mx-5 -mt-5 mb-6 h-56 sm:-mx-6 sm:-mt-6" />
           <h1 className="font-display text-3xl font-extrabold tracking-tight">{daily ? "Mystery player of the day" : "Guess the player"}</h1>
           <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-mist-500">
             A current star from the big five leagues. You start with one clue; every wrong guess reveals another. Win 100 points with one clue, down to 10 with the last.

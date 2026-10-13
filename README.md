@@ -87,6 +87,23 @@ One page for everything. The **Games** section always works (players, activity t
 
 Account details, the "Send to Dixon Watch" bookmarklet and Premium (Paystack).
 
+## Photo credits
+
+The pictures on the game cards are real photos from [Unsplash](https://unsplash.com/?utm_source=dixon_watch&utm_medium=referral), used under the Unsplash License (free to use, credit optional). They are saved in `public/games/` (resized, about 100 KB each), so the site never calls Unsplash while running. If a photo ever fails to load, the card shows drawn artwork instead (`src/features/games/art.jsx`). The credits also appear at the bottom of the Games page (`src/features/games/photoCredits.js`).
+
+| Game | File | Photo |
+|---|---|---|
+| Match Predictor | `public/games/predictor.webp` | [Alex Simpson](https://unsplash.com/photos/a-soccer-match-in-a-stadium-at-night-DOicNPBVSHs) |
+| Football IQ Quiz | `public/games/quiz.webp` | [Emily Morter](https://unsplash.com/photos/question-mark-light-in-graffiti-tunnel-8xAA0f9yQnE) |
+| Head-to-Head | `public/games/battle.webp` | [Tobias Flyckt](https://unsplash.com/photos/woman-in-black-and-white-soccer-jersey-kicking-soccer-ball-on-green-field-during-daytime-5yNJx9NO3Yc) |
+| Guess the Player | `public/games/guess.webp` | [Keyur Tandel](https://unsplash.com/photos/a-man-playing-soccer-on-the-beach-at-sunset-NBgX8uetgWs) |
+| Guess the Shirt Number | `public/games/shirt.webp` | [Colin + Meg](https://unsplash.com/photos/a-display-case-with-three-red-soccer-jerseys-H7yPF5oZuYE) |
+| Who Played for Both? | `public/games/clubs.webp` | [Iker Merodio](https://unsplash.com/photos/fan-holds-up-euskadi-scarf-in-stadium-crowd-lI9eifZXDwY) |
+| Name the Trophy | `public/games/trophy.webp` | [My Profit Tutor](https://unsplash.com/photos/a-golden-soccer-trophy-sitting-on-top-of-a-field-bdJ8Kxaz-mQ) |
+| Complete the XI | `public/games/xi.webp` | [Nguyen Thu Hoai](https://unsplash.com/photos/man-in-blue-crew-neck-t-shirt-standing-on-track-field-during-daytime-v0H-vn0BixI) |
+| Write a Question | `public/games/submit.webp` | [atelierbyvineeth ...](https://unsplash.com/photos/a-fountain-pen-and-inkwell-on-a-notebook-bBV9kt-rC4c) |
+| Daily challenge | `public/games/daily.webp` | [Blessing Ri](https://unsplash.com/photos/white-braille-paper-on-brown-wooden-table-mBRtqyC_Iq0) |
+
 ## Synced data (Firestore)
 
 Everything lives under `users/{uid}` and only that user can read or write it (`firestore.rules`):

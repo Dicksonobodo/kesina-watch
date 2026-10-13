@@ -6,6 +6,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/cn";
 import { StatChip, useGames, XpBar } from "./GamesProvider";
 import { GameArt } from "./art";
+import { PHOTO_CREDITS } from "./photoCredits";
 import { ErrorNote, Eyebrow, PlayerChip } from "./ui";
 
 export const GAMES = [
@@ -101,6 +102,22 @@ export function GamesHub() {
           </motion.div>
         ))}
       </div>
+
+      <p className="mt-10 text-[11px] leading-relaxed text-mist-700">
+        Photos from{" "}
+        <a href="https://unsplash.com/?utm_source=dixon_watch&utm_medium=referral" target="_blank" rel="noopener noreferrer" className="underline decoration-white/20 underline-offset-2 hover:text-mist-300">
+          Unsplash
+        </a>
+        :{" "}
+        {Object.values(PHOTO_CREDITS).map((c, i, all) => (
+          <span key={c.page}>
+            <a href={`${c.profile}?utm_source=dixon_watch&utm_medium=referral`} target="_blank" rel="noopener noreferrer" className="underline decoration-white/20 underline-offset-2 hover:text-mist-300">
+              {c.photographer}
+            </a>
+            {i < all.length - 1 ? ", " : "."}
+          </span>
+        ))}
+      </p>
 
       {profile?.admin && (
         <div className="mt-6 flex flex-wrap gap-4">
