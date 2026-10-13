@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { GamesSection } from "@/features/games/GamesAdmin";
 import { AnimatePresence, motion } from "motion/react";
 import {
   Activity,
@@ -91,11 +93,17 @@ function useAdminStream(enabled) {
 
 export function AdminPage() {
   const { admin, loaded } = useAccount();
-  const { snap, status, error } = useAdminStream(admin);
+  // The Live server is optional: the games section works without it, and this section fills in when it is connected.
+  const { snap, status, error } = useAdminStream(admin && Boolean(apiUrl));
   const [now, setNow] = useState(Date.now());
+  const [waited, setWaited] = useState(false);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const w = setTimeout(() => setWaited(true), 8000);
+    return () => {
+      clearInterval(t);
+      clearTimeout(w);
+    };
   }, []);
 
   if (!loaded) return <Centered><Spinner className="size-6 text-signal" /></Centered>;
@@ -104,7 +112,7 @@ export function AdminPage() {
       <Centered>
         <ShieldAlert className="mx-auto size-10 text-mist-700" />
         <p className="mt-4 font-display text-xl font-bold">Admins only</p>
-        <p className="mt-2 text-sm text-mist-500">Add your sign-in email to ADMIN_EMAILS on the server to open this page.</p>
+        <p className="mt-2 text-sm text-mist-500">Add your sign-in email to ADMIN_EMAILS (on Vercel, and on the Live server if you run one) to open this page.</p>
       </Centered>
     );
 
@@ -112,44 +120,42 @@ export function AdminPage() {
 
   return (
     <div>
-      <PageHeader
-        eyebrow="Dixon Watch"
-        title="Admin"
-        description="What's happening right now: who's online, what they're watching, downloads, detections and server health."
+      <PageHeader eyebrow="Dixon Watch" title="Admin" description="Players, games and questions, plus live activity and server health when the Live server is connected." />
+
+      {/* ---------- Games (always available) ---------- */}
+      <SectionTitle title="Games" action={<Link to="/games/moderate" className="text-sm font-semibold text-signal">Review questions →</Link>} />
+      <GamesSection />
+
+      {/* ---------- Live server (joins in when it is connected) ---------- */}
+      <SectionTitle
+        title="Live server"
         action={
-          <span
-            className={cn(
-              "inline-flex items-center gap-2 self-start rounded-full px-3.5 py-2 font-mono text-xs font-medium ring-1 sm:self-auto",
-              status === "live" ? "bg-signal/10 text-signal ring-signal/30" : status === "error" ? "bg-live/10 text-live ring-live/30" : "bg-white/5 text-mist-300 ring-white/10",
-            )}
-          >
-            {status === "live" ? <span className="size-2 animate-pulse rounded-full bg-signal" /> : status === "error" ? <AlertTriangle className="size-3.5" /> : <Spinner className="size-3" />}
-            {status === "live" ? `Live · updated ${ago}s ago` : status === "error" ? "Not allowed" : "Connecting…"}
-          </span>
+          apiUrl && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full px-3 py-1.5 font-mono text-xs font-medium ring-1",
+                status === "live" ? "bg-signal/10 text-signal ring-signal/30" : status === "error" ? "bg-live/10 text-live ring-live/30" : "bg-white/5 text-mist-300 ring-white/10",
+              )}
+            >
+              {status === "live" ? <span className="size-2 animate-pulse rounded-full bg-signal" /> : status === "error" ? <AlertTriangle className="size-3.5" /> : <Spinner className="size-3" />}
+              {status === "live" ? `Live · updated ${ago}s ago` : status === "error" ? "Not allowed" : "Connecting…"}
+            </span>
+          )
         }
       />
 
-      {error && <p className="mt-6 rounded-2xl bg-live/[.08] px-4 py-3 text-sm text-live ring-1 ring-live/25">{error}</p>}
-
       {!snap ? (
-        <div className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-3">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="skeleton h-28 rounded-3xl" />
-          ))}
-        </div>
+        <ServerNotConnected configured={Boolean(apiUrl)} waited={waited} error={error} />
       ) : (
         <>
-          {/* Headline numbers */}
-          <section className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <Stat icon={Users} label="Online now" value={snap.online} accent sub={snap.premiumOnline ? `${snap.premiumOnline} premium` : "signed-in tabs"} />
-            <Stat icon={Eye} label="Watching now" value={snap.watching} sub={`${snap.watchingLive} live · ${snap.watching - snap.watchingLive} movies`} />
-            <Stat icon={Download} label="Downloading now" value={snap.downloading} sub={`${snap.today.downloads} started today`} />
+            <Stat icon={Eye} label="Watching live now" value={snap.watching} sub={`${snap.today.watches} streams started today`} />
             <Stat icon={ScanSearch} label="Detections today" value={snap.today.detections} sub={`${snap.today.failedDetections} found nothing`} />
-            <Stat icon={Activity} label="Users today" value={snap.today.users} sub={`${snap.today.watches} plays today`} />
+            <Stat icon={Activity} label="Users today" value={snap.today.users} sub="signed-in visitors" />
             <Stat icon={AlertTriangle} label="Errors today" value={snap.today.errors} status={snap.today.errors > 0 ? "warning" : "good"} sub={snap.today.errors > 0 ? "see activity below" : "all clear"} />
           </section>
 
-          {/* Online over the last hour */}
           <section className="mt-4 rounded-3xl bg-white/[.025] p-5 ring-1 ring-white/[.06]">
             <div className="flex items-baseline justify-between">
               <h2 className="text-sm font-semibold">People online, last hour</h2>
@@ -159,15 +165,12 @@ export function AdminPage() {
           </section>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-            {/* Who's watching */}
             <section className="rounded-3xl bg-white/[.025] p-5 ring-1 ring-white/[.06]">
               <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
                 <Eye className="size-4 text-mist-500" /> Watching right now
               </h2>
               <PeopleList people={snap.people} now={now} />
             </section>
-
-            {/* Activity feed */}
             <section className="rounded-3xl bg-white/[.025] p-5 ring-1 ring-white/[.06]">
               <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
                 <Activity className="size-4 text-mist-500" /> Activity
@@ -179,6 +182,43 @@ export function AdminPage() {
           <ServerHealth server={snap.server} />
         </>
       )}
+    </div>
+  );
+}
+
+function SectionTitle({ title, action }) {
+  return (
+    <div className="mt-12 mb-4 flex items-center justify-between gap-3 first-of-type:mt-10">
+      <h2 className="font-display text-xl font-bold tracking-tight">{title}</h2>
+      {action}
+    </div>
+  );
+}
+
+function ServerNotConnected({ configured, waited, error }) {
+  if (configured && !waited && !error) {
+    return (
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="skeleton h-28 rounded-3xl" />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-start gap-4 rounded-3xl border border-dashed border-white/[.1] p-6">
+      <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/[.05] ring-1 ring-white/10">
+        <Server className="size-5 text-mist-500" />
+      </span>
+      <div>
+        <p className="font-semibold">{configured ? "The Live server isn't reachable right now" : "The Live server isn't connected"}</p>
+        <p className="mt-1 text-sm leading-relaxed text-mist-500">
+          {error ||
+            (configured
+              ? "Start it (or its tunnel) and this section fills in by itself."
+              : "When it is running and VITE_API_URL points to it, this section shows who is online, who is watching which stream, detections, errors and server health. Everything above works without it.")}
+        </p>
+      </div>
     </div>
   );
 }

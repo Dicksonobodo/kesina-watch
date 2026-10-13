@@ -1,25 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, ArrowLeft, Brain, PenLine, ShieldCheck, Swords, Target, UserPlus, Users } from "lucide-react";
+import { Activity, Brain, PenLine, Swords, Target, UserPlus, Users } from "lucide-react";
 import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
-import { useGames } from "./GamesProvider";
 import { Card, ErrorNote, Eyebrow, PlayerChip } from "./ui";
 
 /*
- * Admin dashboard for the games, built from what the games store (no Live server needed):
+ * The games part of the Admin page, built from what the games store (no Live server needed):
  * players, activity today, predictions, battles and the question review queue.
  */
 
 const n = (v) => (v == null ? "–" : v.toLocaleString());
 
-export function GamesAdmin() {
-  const { profile } = useGames();
+/** The games part of the admin page: loads its own numbers, refreshes every 30 seconds. */
+export function GamesSection() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (profile && !profile.admin) return undefined;
     let live = true;
     const load = () =>
       gamesApi("admin.stats")
@@ -31,16 +29,7 @@ export function GamesAdmin() {
       live = false;
       clearInterval(timer);
     };
-  }, [profile]);
-
-  if (profile && !profile.admin)
-    return (
-      <div className="mx-auto max-w-md text-center">
-        <ShieldCheck className="mx-auto size-10 text-mist-700" />
-        <p className="mt-4 font-display text-xl font-bold">Admins only</p>
-        <p className="mt-2 text-sm text-mist-500">Add your sign-in email to ADMIN_EMAILS to open this page.</p>
-      </div>
-    );
+  }, []);
 
   const cards = data && [
     { icon: Users, label: "Players", value: data.players.total, sub: `${n(data.players.activeWeek)} active this week` },
@@ -52,16 +41,9 @@ export function GamesAdmin() {
   ];
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <Link to="/games" className="mb-6 inline-flex items-center gap-2 text-sm text-mist-500 transition hover:text-mist-100">
-        <ArrowLeft className="size-4" /> Games
-      </Link>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <Eyebrow>Admin</Eyebrow>
-          <h1 className="mt-1 font-display text-3xl font-extrabold tracking-tight">Games dashboard</h1>
-        </div>
-        <span className="font-mono text-[11px] text-mist-500">Updates every 30s · UTC day {data?.day ?? ""}</span>
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="font-mono text-[11px] text-mist-500">Updates every 30s · UTC day {data?.day ?? ""}</p>
       </div>
 
       <div className="mt-4 space-y-3">

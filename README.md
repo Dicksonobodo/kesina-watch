@@ -79,6 +79,10 @@ Quizzes, predictions and head-to-head battles with XP, levels, daily streaks, co
 
 Without `FIREBASE_SERVICE_ACCOUNT` the games run on an in-memory store (fine for trying them locally in preview mode, but nothing is saved between restarts, and it won't work across several Vercel instances).
 
+### Admin (`/admin`, admins only)
+
+One page for everything. The **Games** section always works (players, activity today, predictions, battles, the question review queue), because it reads what the games store in Firestore. The **Live server** section (who is online, who is watching which stream, detections, errors, server health) joins in by itself when the Live detection server is running and `VITE_API_URL` points to it. Who counts as an admin: `ADMIN_EMAILS` on Vercel (for the games) and in `server/.env` (for the Live server).
+
 ### Profile (`/profile`)
 
 Account details, the "Send to Dixon Watch" bookmarklet and Premium (Paystack).
