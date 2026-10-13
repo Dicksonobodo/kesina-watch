@@ -17,6 +17,9 @@ import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
  */
 
 const ACTIONS = {
+  /* who am I (no database access: used by the sidebar to show the Admin link) */
+  me: async (who) => ({ admin: who.admin }),
+
   /* profile */
   "profile.get": async (who) => {
     const [profile, daily] = await Promise.all([getProfile(who), dailyStatus(who)]);

@@ -29,7 +29,9 @@ export function AppShell() {
   const [syncProblem, setSyncProblem] = useState(null);
   useEffect(() => onSyncProblem(setSyncProblem), []);
   const online = useOnline();
-  const { admin } = useAccount();
+  const { admin, adminServer } = useAccount();
+  // The live dashboard needs the detection server; otherwise Admin opens the question review.
+  const adminNav = { ...ADMIN_NAV, to: adminServer ? "/admin" : "/games/moderate" };
 
   return (
     <div className="relative min-h-dvh lg:pl-72">
@@ -42,7 +44,7 @@ export function AppShell() {
         </NavLink>
 
         <nav className="mt-10 space-y-1">
-          {[...NAV.filter((n) => !n.hidden), ...(admin ? [ADMIN_NAV] : [])].map((item) => (
+          {[...NAV.filter((n) => !n.hidden), ...(admin ? [adminNav] : [])].map((item) => (
             <SidebarLink key={item.to} {...item} />
           ))}
         </nav>
