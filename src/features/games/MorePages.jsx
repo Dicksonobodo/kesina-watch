@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi, THEME_COLORS } from "@/lib/games";
 import { cn } from "@/lib/cn";
 import { StatChip, useGames, XpBar } from "./GamesProvider";
+import { GameArt } from "./art";
 import { Card, ErrorNote, Eyebrow, PlayerChip } from "./ui";
 
 const Back = ({ to = "/games", children = "Games" }) => (
@@ -32,14 +33,10 @@ export function DailyChallenge() {
   return (
     <div className="mx-auto max-w-2xl">
       <Back />
-      <div className="flex items-center gap-4">
-        <span className="grid size-14 place-items-center rounded-3xl bg-signal/10 ring-1 ring-signal/25">
-          <CalendarCheck className="size-7 text-signal" />
-        </span>
-        <div>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight">Daily challenge</h1>
-          <p className="text-sm text-mist-500">New every day (UTC). Finish both to keep your streak glowing.</p>
-        </div>
+      <GameArt id="daily" fit="meet" className="mb-5 h-32 rounded-3xl ring-1 ring-white/10" />
+      <div>
+        <h1 className="font-display text-3xl font-extrabold tracking-tight">Daily challenge</h1>
+        <p className="text-sm text-mist-500">New every day (UTC). Finish both to keep your streak glowing.</p>
       </div>
 
       <Card className="mt-6">
@@ -355,14 +352,10 @@ export function SubmitQuestion() {
   return (
     <div className="mx-auto max-w-xl">
       <Back />
-      <div className="flex items-center gap-4">
-        <span className="grid size-14 place-items-center rounded-3xl bg-signal/10 ring-1 ring-signal/25">
-          <PenLine className="size-7 text-signal" />
-        </span>
-        <div>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight">Write a question</h1>
-          <p className="text-sm text-mist-500">Make it factual and unambiguous. Approved questions earn XP and coins.</p>
-        </div>
+      <GameArt id="submit" fit="meet" className="mb-5 h-32 rounded-3xl ring-1 ring-white/10" />
+      <div>
+        <h1 className="font-display text-3xl font-extrabold tracking-tight">Write a question</h1>
+        <p className="text-sm text-mist-500">Make it factual and unambiguous. Approved questions earn XP and coins.</p>
       </div>
 
       <form onSubmit={send} className="mt-6 space-y-4">

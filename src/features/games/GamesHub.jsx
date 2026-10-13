@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/cn";
 import { StatChip, useGames, XpBar } from "./GamesProvider";
+import { GameArt } from "./art";
 import { ErrorNote, Eyebrow, PlayerChip } from "./ui";
 
 export const GAMES = [
@@ -68,12 +69,15 @@ export function GamesHub() {
 
         {/* Daily challenge */}
         <Link to="/games/daily" className="group relative overflow-hidden rounded-3xl bg-white/[.03] p-5 ring-1 ring-white/[.08] transition hover:ring-signal/40 sm:p-6">
+          <div className="absolute inset-y-0 right-0 hidden w-[34%] opacity-60 [mask-image:linear-gradient(to_right,transparent,black_70%)] sm:block">
+            <GameArt id="daily" className="size-full" />
+          </div>
           <div className="absolute -top-10 -right-10 size-40 rounded-full bg-signal/10 blur-3xl" />
           <div className="relative flex items-center gap-2 text-signal">
             <CalendarCheck className="size-4" />
             <Eyebrow className="text-signal">Daily challenge</Eyebrow>
           </div>
-          <p className="relative mt-3 font-display text-xl font-bold tracking-tight">A new quiz and mystery player every day</p>
+          <p className="relative mt-3 font-display text-xl font-bold tracking-tight sm:pr-20">A new quiz and mystery player every day</p>
           <p className="relative mt-2 text-sm text-mist-500">
             {daily ? `${daily.quizDone ? "✓" : "○"} Daily quiz   ${daily.guessDone ? "✓" : "○"} Mystery player` : "Same questions for everyone. One try each."}
           </p>
@@ -84,15 +88,15 @@ export function GamesHub() {
       <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {GAMES.map((g, i) => (
           <motion.div key={g.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.35 }}>
-            <Link to={g.to} className="group flex h-full flex-col rounded-3xl bg-white/[.025] p-5 ring-1 ring-white/[.06] transition hover:-translate-y-0.5 hover:bg-white/[.04] hover:ring-signal/40">
-              <div className="flex items-start justify-between">
-                <span className="grid size-12 place-items-center rounded-2xl bg-signal/10 ring-1 ring-signal/25 transition group-hover:bg-signal/20">
-                  <g.icon className="size-6 text-signal" />
-                </span>
-                {g.tag && <span className="rounded-full bg-white/[.06] px-2.5 py-1 font-mono text-[10px] tracking-wider text-mist-300 uppercase">{g.tag}</span>}
+            <Link to={g.to} className="group flex h-full flex-col overflow-hidden rounded-3xl bg-white/[.025] ring-1 ring-white/[.06] transition hover:-translate-y-0.5 hover:bg-white/[.04] hover:ring-signal/40">
+              <div className="relative">
+                <GameArt id={g.id} className="h-36 transition duration-500 group-hover:scale-[1.03]" />
+                {g.tag && <span className="absolute top-3 right-3 rounded-full bg-black/55 px-2.5 py-1 font-mono text-[10px] tracking-wider text-mist-100 uppercase backdrop-blur">{g.tag}</span>}
               </div>
-              <h3 className="mt-5 font-display text-lg font-bold tracking-tight">{g.title}</h3>
-              <p className={cn("mt-1.5 text-sm leading-relaxed text-mist-500")}>{g.desc}</p>
+              <div className="flex flex-1 flex-col p-5">
+                <h3 className="font-display text-lg font-bold tracking-tight">{g.title}</h3>
+                <p className={cn("mt-1.5 text-sm leading-relaxed text-mist-500")}>{g.desc}</p>
+              </div>
             </Link>
           </motion.div>
         ))}

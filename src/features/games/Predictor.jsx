@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
 import { useGames } from "./GamesProvider";
+import { GameArt } from "./art";
 import { Card, ErrorNote, Eyebrow, PlayerChip } from "./ui";
 
 /*
@@ -39,14 +40,10 @@ export function Predictor() {
       <Link to="/games" className="mb-6 inline-flex items-center gap-2 text-sm text-mist-500 transition hover:text-mist-100">
         <ArrowLeft className="size-4" /> Games
       </Link>
-      <div className="flex items-center gap-4">
-        <span className="grid size-14 place-items-center rounded-3xl bg-signal/10 ring-1 ring-signal/25">
-          <Target className="size-7 text-signal" />
-        </span>
-        <div>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight">Match Predictor</h1>
-          <p className="text-sm text-mist-500">3 points for the result, 3 more for the exact score. Big matches count extra.</p>
-        </div>
+      <GameArt id="predictor" fit="meet" className="mb-5 h-32 rounded-3xl ring-1 ring-white/10" />
+      <div>
+        <h1 className="font-display text-3xl font-extrabold tracking-tight">Match Predictor</h1>
+        <p className="text-sm text-mist-500">3 points for the result, 3 more for the exact score. Big matches count extra.</p>
       </div>
 
       {joinCode && <JoinBanner code={joinCode} onDone={() => (setParams({}, { replace: true }), setTab("leagues"))} />}

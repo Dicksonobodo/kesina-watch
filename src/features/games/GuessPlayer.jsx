@@ -8,6 +8,7 @@ import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
 import { PlayerBadge } from "@/features/sports/Sheets";
 import { useGames } from "./GamesProvider";
+import { GameArt } from "./art";
 import { Card, ErrorNote, Eyebrow, RewardCard } from "./ui";
 
 /*
@@ -122,11 +123,9 @@ export function GuessPlayer({ daily = false }) {
       </Link>
 
       {(phase === "intro" || phase === "loading") && (
-        <Card className="text-center">
-          <span className="mx-auto grid size-16 place-items-center rounded-3xl bg-signal/10 ring-1 ring-signal/25">
-            <UserSearch className="size-8 text-signal" />
-          </span>
-          <h1 className="mt-5 font-display text-3xl font-extrabold tracking-tight">{daily ? "Mystery player of the day" : "Guess the player"}</h1>
+        <Card className="overflow-hidden text-center">
+          <GameArt id="guess" fit="meet" className="-mx-5 -mt-5 mb-6 h-40 sm:-mx-6 sm:-mt-6" />
+          <h1 className="font-display text-3xl font-extrabold tracking-tight">{daily ? "Mystery player of the day" : "Guess the player"}</h1>
           <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-mist-500">
             A current star from the big five leagues. You start with one clue; every wrong guess reveals another. Win 100 points with one clue, down to 10 with the last.
             {daily && " Same player for everyone today, one try."}

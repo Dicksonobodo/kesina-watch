@@ -9,6 +9,7 @@ import { gamesApi } from "@/lib/games";
 import { db } from "@/lib/firebase";
 import { cn } from "@/lib/cn";
 import { useGames } from "./GamesProvider";
+import { GameArt } from "./art";
 import { Card, ErrorNote, Eyebrow, OptionButton, PlayerChip } from "./ui";
 
 /*
@@ -51,14 +52,10 @@ export function BattleLobby() {
       <Link to="/games" className="mb-6 inline-flex items-center gap-2 text-sm text-mist-500 transition hover:text-mist-100">
         <ArrowLeft className="size-4" /> Games
       </Link>
-      <div className="flex items-center gap-4">
-        <span className="grid size-14 place-items-center rounded-3xl bg-signal/10 ring-1 ring-signal/25">
-          <Swords className="size-7 text-signal" />
-        </span>
-        <div>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight">Head-to-Head</h1>
-          <p className="text-sm text-mist-500">Same 10 questions, same clock. Faster answers score more.</p>
-        </div>
+      <GameArt id="battle" fit="meet" className="mb-5 h-32 rounded-3xl ring-1 ring-white/10" />
+      <div>
+        <h1 className="font-display text-3xl font-extrabold tracking-tight">Head-to-Head</h1>
+        <p className="text-sm text-mist-500">Same 10 questions, same clock. Faster answers score more.</p>
       </div>
 
       {invite && (
