@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, Ban, ChevronDown, Copy, Flag, MessageCircle, MoreHorizontal, Plus, Search, Send, SquarePen, Swords, Undo2, X } from "lucide-react";
+import { ArrowLeft, Ban, ChevronDown, Copy, Crown, Equal, Flag, MessageCircle, MoreHorizontal, Plus, Search, Send, SquarePen, Swords, Undo2, X } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
@@ -510,9 +510,12 @@ function Bubble({ m, first, last, me, peer }) {
             <span>{CHAT_GAMES.find((g) => g.id === m.game.type)?.emoji}</span> {m.game.title} · {mine ? "you played" : `${peer?.name ?? "they"} played`}
           </button>
         ) : m.type === "game" && m.game ? (
-          <button onClick={() => setGameId(m.game.id)} className={cn("block w-60 overflow-hidden rounded-[22px] text-left ring-1 shadow-lg shadow-black/30 transition active:scale-[.98]", tail, "bg-ink-800 ring-white/10")}>
-            <GameCard game={m.game} me={me} peer={peer} />
-          </button>
+          <div className="relative">
+            <button onClick={() => setGameId(m.game.id)} className={cn("block w-60 overflow-hidden rounded-[22px] text-left ring-1 shadow-lg shadow-black/30 transition active:scale-[.98]", tail, "bg-ink-800 ring-white/10")}>
+              <GameCard game={m.game} me={me} peer={peer} />
+            </button>
+            <ResultBadge game={m.game} me={me} side={mine ? "left" : "right"} />
+          </div>
         ) : (
           <button
             onClick={() => setActions((a) => !a)}
@@ -650,5 +653,37 @@ function GamePreview({ game, me, peer }) {
         </span>
       )}
     </>
+  );
+}
+
+/** On a finished game's bubble, like iMessage games: a floating crown if you won, a red ✕ if you lost. */
+function ResultBadge({ game, me, side }) {
+  if (game.status !== "done" || !game.winner) return null;
+  const pos = side === "left" ? "-top-4 -left-3" : "-top-4 -right-3";
+  if (game.winner === "draw") {
+    return (
+      <span className={cn("absolute grid size-9 place-items-center rounded-full bg-mist-300 text-ink-950 shadow-lg ring-2 ring-ink-900", pos)} title="Draw" aria-label="Draw">
+        <Equal className="size-5" strokeWidth={3} />
+      </span>
+    );
+  }
+  if (game.winner === me) {
+    return (
+      <motion.span
+        className={cn("absolute grid size-11 place-items-center rounded-full bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-[0_6px_20px_-4px_rgba(251,191,36,.8)] ring-2 ring-ink-900", pos)}
+        initial={{ scale: 0, rotate: -20 }}
+        animate={{ scale: 1, rotate: [-8, 8, -8], y: [0, -5, 0] }}
+        transition={{ scale: { type: "spring", stiffness: 400, damping: 14 }, rotate: { duration: 2.4, repeat: Infinity, ease: "easeInOut" }, y: { duration: 2.4, repeat: Infinity, ease: "easeInOut" } }}
+        title="You won"
+        aria-label="You won"
+      >
+        <Crown className="size-6" fill="currentColor" strokeWidth={1.5} />
+      </motion.span>
+    );
+  }
+  return (
+    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 400, damping: 15 }} className={cn("absolute grid size-10 place-items-center rounded-full bg-live text-white shadow-[0_6px_18px_-4px_rgba(239,68,68,.7)] ring-2 ring-ink-900", pos)} title="You lost" aria-label="You lost">
+      <X className="size-6" strokeWidth={3.2} />
+    </motion.span>
   );
 }
