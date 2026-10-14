@@ -84,10 +84,36 @@ export async function getProfile(identity) {
       leagues: [],
       stats: blankStats(),
       createdAt: Date.now(),
+      lastSeenDay: dayKey(),
+      lastSeen: Date.now(),
     };
     await store.set(`gp/${identity.uid}`, p);
   }
   // Fill in anything added after the profile was created.
+  p.stats = { ...blankStats(), ...(p.stats ?? {}) };
+  p.achievements ??= {};
+  p.leagues ??= [];
+  return p;
+}
+
+const seenToday = new Map(); // uid → day this server instance last recorded
+
+/** Records that a player opened or used the games today (the admin's "active today"). */
+export async function markSeen(identity) {
+  const today = dayKey();
+  if (seenToday.get(identity.uid) === today) return;
+  seenToday.set(identity.uid, today);
+  if (seenToday.size > 5000) seenToday.clear();
+  const store = await getStore();
+  const p = await store.get(`gp/${identity.uid}`);
+  if (p && p.lastSeenDay !== today) await store.update(`gp/${identity.uid}`, { lastSeenDay: today, lastSeen: Date.now() });
+}
+
+/** A profile if one exists; never creates one (used by the home screen, which everyone sees). */
+export async function peekProfile(identity) {
+  const store = await getStore();
+  const p = await store.get(`gp/${identity.uid}`);
+  if (!p) return null;
   p.stats = { ...blankStats(), ...(p.stats ?? {}) };
   p.achievements ??= {};
   p.leagues ??= [];

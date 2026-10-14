@@ -1,6 +1,5 @@
-import { cached } from "../sports.js";
-import { getStore } from "./store.js";
-import { dayKey, GameError, msToWeekEnd, weekKey } from "./util.js";
+import { getStore, writeVersion } from "./store.js";
+import { dayKey, GameError, memo, msToWeekEnd, weekKey } from "./util.js";
 
 /*
  * Leaderboards: one small document per player per board, ordered by one number. Top 50 only
@@ -21,9 +20,10 @@ export async function getBoard(name, uid) {
   const board = BOARDS[name];
   if (!board) throw new GameError("Unknown leaderboard.");
   const collection = board.collection();
-  const rows = await cached(`lb:${collection}`, 15_000, async () => {
+  // Cached for a few seconds, but dropped as soon as anything is written, so your own score shows up at once.
+  const rows = await memo(`lb:${collection}`, 8_000, writeVersion(), async () => {
     const store = await getStore();
-    return { value: await store.list(collection, { orderBy: board.field, desc: true, limit: 50 }) };
+    return store.list(collection, { orderBy: board.field, desc: true, limit: 50 });
   });
   const entries = rows.map((r, i) => ({ rank: i + 1, uid: r.id, name: r.name ?? "Player", avatar: r.avatar ?? "⚽", theme: r.theme ?? "lime", value: r[board.field] ?? 0, me: r.id === uid }));
   let me = entries.find((e) => e.me) ?? null;

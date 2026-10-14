@@ -46,6 +46,10 @@ Without Firebase keys, local dev signs you in as a **preview user** so you can e
 - **Search:** one box for competitions, teams, players and today's matches.
 - Data: ESPN's public feeds, TheSportsDB, BBC / Sky / ESPN RSS. All cached in the functions and at Vercel's edge.
 
+### Home (`/`)
+
+A photo hero, what is live right now (or the next matches today), the three things the site does (each with a photo), your game progress and daily challenge, your pinned channels, and the latest football news. Links shared into the app (`/?u=<page>`, the bookmarklet and Android Share) still go straight to Live.
+
 ### Live (`/live`)
 
 Paste a concert, programme or channel page, an event page with several feeds, or a direct `.m3u8` / IPTV `.m3u` link.
@@ -77,7 +81,7 @@ Quizzes, predictions and head-to-head battles with XP, levels, daily streaks, co
 2. Make sure `FIREBASE_PROJECT_ID` (or the existing `VITE_FIREBASE_PROJECT_ID`) is set in Vercel, and set `ADMIN_EMAILS` (comma-separated sign-in emails) so you can approve questions.
 3. Publish the updated `firestore.rules` (Firestore → Rules). Browsers may only watch the battle room they're in.
 
-Without `FIREBASE_SERVICE_ACCOUNT` the games run on an in-memory store (fine for trying them locally in preview mode, but nothing is saved between restarts, and it won't work across several Vercel instances).
+Without `FIREBASE_SERVICE_ACCOUNT` the games run on an in-memory store. Locally (`npm run dev`) it is saved to `.dev-data/games.json` (git-ignored) so it survives restarts; on Vercel it would not work across instances, so always set the variable there. For localhost with real Firestore, put the same `FIREBASE_SERVICE_ACCOUNT` line in your local `.env` (Vercel's variables are not visible to your computer).
 
 ### Admin (`/admin`, admins only)
 
@@ -89,7 +93,7 @@ Account details, the "Send to Dixon Watch" bookmarklet and Premium (Paystack).
 
 ## Photo credits
 
-The pictures on the game cards are real photos from [Unsplash](https://unsplash.com/?utm_source=dixon_watch&utm_medium=referral), used under the Unsplash License (free to use, credit optional). They are saved in `public/games/` (resized, about 100 KB each), so the site never calls Unsplash while running. If a photo ever fails to load, the card shows drawn artwork instead (`src/features/games/art.jsx`). The credits also appear at the bottom of the Games page (`src/features/games/photoCredits.js`).
+The pictures on the home screen, the game cards and the sign-in page are real photos from [Unsplash](https://unsplash.com/?utm_source=dixon_watch&utm_medium=referral), used under the Unsplash License (free to use, credit optional). They are saved in `public/games/` and `public/home/` (resized, about 100 KB each), so the site never calls Unsplash while running. If a photo ever fails to load, the card shows drawn artwork instead (`src/features/games/art.jsx`). The credits also appear at the bottom of the Games page (`src/features/games/photoCredits.js`).
 
 | Game | File | Photo |
 |---|---|---|

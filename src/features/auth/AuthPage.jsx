@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowRight, Eye, EyeOff, Lock, Mail, MousePointerClick, ShieldCheck, UserRound, Zap } from "lucide-react";
+import { ArrowRight, Trophy, Eye, EyeOff, Lock, Mail, MousePointerClick, ShieldCheck, UserRound, Zap } from "lucide-react";
 import { useAuth, isFirebaseConfigured } from "./AuthProvider";
 import { authErrorMessage } from "./authErrors";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { GoogleIcon } from "@/components/ui/GoogleIcon";
 import { Logo } from "@/components/ui/Logo";
-import { Poster } from "@/components/ui/Poster";
 import { Splash } from "@/components/layout/Splash";
 import { cn } from "@/lib/cn";
 
@@ -77,7 +76,7 @@ export function AuthPage() {
             {mode === "signin" ? "Welcome back." : "Start watching."}
           </h1>
           <p className="mt-2 text-[15px] text-mist-500">
-            {mode === "signin" ? "Sign in to your pinned channels." : "One account. Every device. Zero ads."}
+            {mode === "signin" ? "Sign in to your scores, games and channels." : "One account. Every device. Play to win."}
           </p>
 
           {/* Mode switch */}
@@ -225,16 +224,16 @@ export function AuthPage() {
   );
 }
 
-const SHOWCASE_POSTERS = [
-  { title: "Neon Tide", year: 2025, palette: ["#2de2e6", "#0b3d91", "#050b1f"], className: "left-[6%] top-[14%] w-[34%] -rotate-[8deg]", delay: 0 },
-  { title: "Saint Heatwave", year: 2024, palette: ["#ff6b3d", "#7a1fa2", "#120a24"], className: "left-[34%] top-[6%] w-[38%] rotate-[3deg] z-10", delay: 0.6 },
-  { title: "Low Orbit", year: 2026, palette: ["#ffd23f", "#ee4266", "#1a0a12"], className: "right-[4%] top-[20%] w-[32%] rotate-[10deg]", delay: 1.2 },
+const SHOWCASE_PHOTOS = [
+  { src: "/home/sports.webp", className: "left-[6%] top-[14%] w-[34%] -rotate-[8deg]", delay: 0 },
+  { src: "/games/trophy.webp", className: "left-[34%] top-[6%] w-[38%] rotate-[3deg] z-10", delay: 0.6 },
+  { src: "/home/live.webp", className: "right-[4%] top-[20%] w-[32%] rotate-[10deg]", delay: 1.2 },
 ];
 
 const PERKS = [
-  { icon: ShieldCheck, text: "Ads, pop-ups and redirects blocked before you see them" },
-  { icon: MousePointerClick, text: "No fake buttons. Just the stream." },
-  { icon: Zap, text: "Paste a live link, press play" },
+  { icon: ShieldCheck, text: "Live streams with ads and pop-ups blocked" },
+  { icon: Trophy, text: "Live scores, tables and news for 35+ competitions" },
+  { icon: Zap, text: "Quizzes, predictions and battles with friends" },
 ];
 
 function Showcase() {
@@ -248,9 +247,9 @@ function Showcase() {
       </div>
 
       <div className="relative mx-10 h-[46%] min-h-[300px]">
-        {SHOWCASE_POSTERS.map((p) => (
+        {SHOWCASE_PHOTOS.map((p) => (
           <motion.div
-            key={p.title}
+            key={p.src}
             className={cn("absolute", p.className)}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: [0, -10, 0] }}
@@ -259,14 +258,14 @@ function Showcase() {
               y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: p.delay },
             }}
           >
-            <Poster title={p.title} year={p.year} palette={p.palette} className="shadow-2xl shadow-black/60" />
+            <img src={p.src} alt="" className="aspect-[3/4] w-full rounded-2xl object-cover shadow-2xl ring-1 shadow-black/60 ring-white/15" />
           </motion.div>
         ))}
       </div>
 
       <div className="relative mt-auto p-10 pt-6">
         <h2 className="font-display text-[clamp(36px,4vw,56px)] leading-[0.98] font-extrabold tracking-tight">
-          Every live show.
+          Watch live. Follow the game.
           <br />
           <span className="text-signal text-glow">Zero ads.</span>
         </h2>

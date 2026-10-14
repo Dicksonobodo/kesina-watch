@@ -60,6 +60,20 @@ export function shuffle(list, rng = Math.random) {
 
 export const sample = (list, n, rng = Math.random) => shuffle(list, rng).slice(0, n);
 
+const memos = new Map();
+/**
+ * Short-lived cache that is dropped as soon as anything is written (see store.js), so a board or
+ * count never shows older data than the last change this server instance saw.
+ */
+export async function memo(key, ttlMs, version, load) {
+  const hit = memos.get(key);
+  if (hit && hit.version === version && Date.now() - hit.at < ttlMs) return hit.value;
+  const value = await load();
+  memos.set(key, { at: Date.now(), version, value });
+  if (memos.size > 200) memos.clear();
+  return value;
+}
+
 export class GameError extends Error {
   constructor(message, status = 400) {
     super(message);

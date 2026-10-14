@@ -1,5 +1,5 @@
 import { AuthError, identify } from "./_lib/games/auth.js";
-import { buy, equip, getProfile, setName, viewProfile } from "./_lib/games/profile.js";
+import { buy, equip, getProfile, markSeen, peekProfile, setName, viewProfile } from "./_lib/games/profile.js";
 import { boardNames, getBoard } from "./_lib/games/leaderboard.js";
 import { answerQuestion, currentQuestion, dailyStatus, KINDS, startSession } from "./_lib/games/sessions.js";
 import { guessAnswer, guessGiveUp, guessReveal, startGuess } from "./_lib/games/guess.js";
@@ -17,9 +17,19 @@ import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
  * ID token in the Authorization header.
  */
 
+// Calls that don't count as "playing today" for the admin numbers.
+const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending"]);
+
 const ACTIONS = {
   /* who am I (no database access: used by the sidebar to show the Admin link) */
   me: async (who) => ({ admin: who.admin }),
+
+  /* home screen: a player's summary if they have one (does not create a profile) */
+  "home.summary": async (who) => {
+    const p = await peekProfile(who);
+    if (!p) return { profile: null };
+    return { profile: viewProfile(p, who), daily: await dailyStatus(who) };
+  },
 
   /* profile */
   "profile.get": async (who) => {
@@ -112,6 +122,7 @@ export async function POST(request) {
     if (!handler) throw new GameError("Unknown action.", 404);
     const who = await identify(request);
     rateLimit(`all:${who.uid}`, 240);
+    if (!NOT_ACTIVITY.has(body.action)) await markSeen(who);
     const result = await handler(who, body);
     return Response.json(result ?? { ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {

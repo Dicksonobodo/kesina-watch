@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, Brain, PenLine, Swords, Target, UserPlus, Users } from "lucide-react";
+import { Activity, Brain, PenLine, RefreshCw, Swords, Target, UserPlus, Users } from "lucide-react";
 import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
 import { Card, ErrorNote, Eyebrow, PlayerChip } from "./ui";
@@ -12,29 +12,39 @@ import { Card, ErrorNote, Eyebrow, PlayerChip } from "./ui";
 
 const n = (v) => (v == null ? "–" : v.toLocaleString());
 
-/** The games part of the admin page: loads its own numbers, refreshes every 30 seconds. */
+/** The games part of the admin page: loads its own numbers and refreshes every 10 seconds. */
 export function GamesSection() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      setData(await gamesApi("admin.stats"));
+      setError("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let live = true;
-    const load = () =>
-      gamesApi("admin.stats")
-        .then((d) => live && (setData(d), setError("")))
-        .catch((e) => live && setError(e.message));
     load();
-    const timer = setInterval(load, 30_000);
+    const timer = setInterval(load, 10_000);
+    const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => {
-      live = false;
       clearInterval(timer);
+      clearInterval(tick);
     };
-  }, []);
+  }, [load]);
 
   const cards = data && [
     { icon: Users, label: "Players", value: data.players.total, sub: `${n(data.players.activeWeek)} active this week` },
-    { icon: Activity, label: "Active today", value: data.players.activeToday, sub: `${n(data.players.newToday)} new today`, accent: true },
-    { icon: Brain, label: "Quiz games today", value: data.activity.quizzesToday, sub: "quizzes and guess games" },
+    { icon: Activity, label: "Active today", value: data.players.activeToday, sub: `${n(data.players.newToday)} new today · opened the games`, accent: true },
+    { icon: Brain, label: "Games today", value: data.activity.gamesStartedToday, sub: `${n(data.activity.gamesFinishedToday)} finished` },
     { icon: Target, label: "Predictions today", value: data.activity.predictionsToday, sub: `${n(data.predictions.open)} open · ${n(data.predictions.settled)} scored` },
     { icon: Swords, label: "Battles today", value: data.activity.battlesToday, sub: `${n(data.activity.battlesFinished)} finished in total` },
     { icon: UserPlus, label: "Friends leagues", value: data.activity.leagues, sub: "created so far" },
@@ -43,12 +53,21 @@ export function GamesSection() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="font-mono text-[11px] text-mist-500">Updates every 30s · UTC day {data?.day ?? ""}</p>
+        <p className="font-mono text-[11px] text-mist-500">
+          {data ? `Updated ${Math.max(0, Math.round((now - data.at) / 1000))}s ago` : "Loading"} · refreshes every 10s · UTC day {data?.day ?? ""}
+        </p>
+        <button onClick={load} disabled={busy} className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold text-mist-300 ring-1 ring-white/15 transition hover:bg-white/[.06] disabled:opacity-60">
+          <RefreshCw className={cn("size-3.5", busy && "animate-spin")} /> Refresh
+        </button>
       </div>
 
       <div className="mt-4 space-y-3">
         <ErrorNote>{error}</ErrorNote>
-        {data?.store === "memory" && <ErrorNote>The games are on the temporary in-memory store, so these numbers reset on every restart. Add FIREBASE_SERVICE_ACCOUNT to keep real data.</ErrorNote>}
+        {data?.store === "memory" && (
+          <ErrorNote>
+            This server has no FIREBASE_SERVICE_ACCOUNT, so the games are using temporary storage and these numbers only cover this server's own memory. Add the variable to the environment this page is running in (your local .env for localhost, Vercel for the live site), then restart.
+          </ErrorNote>
+        )}
       </div>
 
       {!data && !error && (

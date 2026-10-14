@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
-import { Gamepad2, Gauge, Pin, Radio, ShieldCheck, Trophy, UserRound, WifiOff } from "lucide-react";
+import { Gamepad2, Gauge, House, Pin, Radio, ShieldCheck, Trophy, UserRound, WifiOff } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth, isFirebaseConfigured } from "@/features/auth/AuthProvider";
 import { useShield } from "@/features/shield/ShieldProvider";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn";
 import { onSyncProblem } from "@/lib/userData";
 
 const NAV = [
+  { to: "/", label: "Home", icon: House, end: true },
   { to: "/live", label: "Live", icon: Radio },
   { to: "/sports", label: "Sports", icon: Trophy },
   { to: "/games", label: "Games", icon: Gamepad2 },
@@ -97,7 +98,7 @@ export function AppShell() {
       <PresenceReporter />
 
       {/* Mobile tab bar */}
-      <nav className="glass-strong fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 grid h-16 grid-cols-3 rounded-[22px] px-1.5 lg:hidden">
+      <nav className="glass-strong fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 grid h-16 grid-cols-4 rounded-[22px] px-1.5 lg:hidden">
         {NAV.filter((n) => !n.desktopOnly && !n.hidden).map((item) => (
           <TabLink key={item.to} {...item} />
         ))}

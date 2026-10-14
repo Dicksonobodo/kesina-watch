@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 import { ShieldProvider } from "@/features/shield/ShieldProvider";
@@ -16,6 +16,7 @@ const SitesPage = page(() => import("@/features/sites/SitesPage"), "SitesPage");
 const ProfilePage = page(() => import("@/features/profile/ProfilePage"), "ProfilePage");
 const AdminPage = page(() => import("@/features/admin/AdminPage"), "AdminPage");
 const SharePage = page(() => import("@/features/account/SharePage"), "SharePage");
+const HomeScreen = page(() => import("@/features/start/HomeScreen"), "HomeScreen");
 
 // Games: each page loads when first opened.
 const GamesLayout = page(() => import("@/features/games/GamesProvider"), "GamesLayout");
@@ -31,12 +32,6 @@ const GameProfile = page(() => import("@/features/games/MorePages"), "GameProfil
 const SubmitQuestion = page(() => import("@/features/games/MorePages"), "SubmitQuestion");
 const Moderation = page(() => import("@/features/games/MorePages"), "Moderation");
 
-// Live is the front door; links like /?u=<page> (bookmarklet) carry on to it.
-function HomeRedirect() {
-  const { search } = useLocation();
-  return <Navigate to={`/live${search}`} replace />;
-}
-
 export default function App() {
   return (
     <BrowserRouter>
@@ -49,7 +44,7 @@ export default function App() {
                     <Route element={<ProtectedRoute />}>
                       <Route path="share" element={<SharePage />} />
                       <Route element={<AppShell />}>
-                        <Route index element={<HomeRedirect />} />
+                        <Route index element={<HomeScreen />} />
                         <Route path="live" element={<LivePage />} />
                         <Route path="sports" element={<SportsPage />} />
                         <Route path="games" element={<GamesLayout />}>
