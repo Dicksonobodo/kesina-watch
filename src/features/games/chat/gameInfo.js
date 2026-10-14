@@ -11,13 +11,14 @@ const fmt = (n) => (n ?? 0).toLocaleString();
 /** The caption under a game bubble, from your side of the conversation. */
 export function gameCardLine(game, me, peerName = "They") {
   if (game.status === "done") {
-    if (game.winner === "draw") return { text: "It's a draw", cta: "View" };
+    if (game.winner === "draw") return { text: "It's a draw", cta: "View", result: "draw" };
     const won = game.winner === me;
+    let detail = "";
     if (game.type === "swipe" && game.scores) {
       const other = Object.keys(game.scores).find((u) => u !== me);
-      return { text: `${won ? "You won" : `${peerName} won`} · ${fmt(game.scores[me])} to ${fmt(game.scores[other])}`, cta: "View", hot: won };
+      detail = `${fmt(game.scores[me])} to ${fmt(game.scores[other])}`;
     }
-    return { text: won ? "You won! 🎉" : `${peerName} won`, cta: "View", hot: won };
+    return { text: won ? "You won" : "You lost", detail, cta: "View", result: won ? "won" : "lost" };
   }
   if (game.type === "swipe") {
     return game.played?.includes(me) ? { text: `Sent · waiting for ${peerName}`, cta: "Open", sent: true } : { text: "Your turn · 80 seconds", cta: "Play", hot: true };

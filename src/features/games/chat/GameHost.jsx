@@ -217,8 +217,8 @@ export function Banner({ game }) {
   const won = game.winner === game.me;
   const opp = game.players.find((p) => p.uid !== game.me);
   return (
-    <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className={cn("mx-auto mb-3 w-fit rounded-full px-5 py-2 font-display text-lg font-extrabold", game.winner === "draw" ? "bg-white/10" : won ? "bg-signal text-ink-950" : "bg-live/15 text-live")}>
-      {game.winner === "draw" ? "It's a draw" : won ? "You won! 🎉" : `${opp?.name} won`}
+    <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className={cn("mx-auto mb-3 w-fit rounded-full px-5 py-2 font-display text-lg font-extrabold", game.winner === "draw" ? "bg-white/10" : won ? "bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-950" : "bg-live text-white")}>
+      {game.winner === "draw" ? "It's a draw" : won ? "👑 You won!" : `✕ You lost · ${opp?.name} won`}
     </motion.div>
   );
 }

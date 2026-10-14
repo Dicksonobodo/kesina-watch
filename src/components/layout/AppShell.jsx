@@ -98,8 +98,8 @@ export function AppShell() {
       <PresenceReporter />
 
       {/* Mobile tab bar */}
-      <nav className="glass-strong fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 grid h-16 grid-cols-4 rounded-[22px] px-1.5 lg:hidden">
-        {NAV.filter((n) => !n.desktopOnly && !n.hidden).map((item) => (
+      <nav className={cn("glass-strong fixed inset-x-3 bottom-[max(.75rem,env(safe-area-inset-bottom))] z-40 grid h-16 rounded-[22px] px-1.5 lg:hidden", admin ? "grid-cols-5" : "grid-cols-4")}>
+        {[...NAV.filter((n) => !n.desktopOnly && !n.hidden), ...(admin ? [ADMIN_NAV] : [])].map((item) => (
           <TabLink key={item.to} {...item} />
         ))}
       </nav>

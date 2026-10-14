@@ -583,10 +583,25 @@ function GameCard({ game, me, peer }) {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] leading-tight font-bold">{game.title}</span>
-          <span className={cn("block truncate text-[12px] leading-tight", line.hot ? "font-semibold text-signal" : "text-mist-500")}>{line.text}</span>
+          {!line.result && <span className={cn("block truncate text-[12px] leading-tight", line.hot ? "font-semibold text-signal" : "text-mist-500")}>{line.text}</span>}
+          {line.detail && <span className="block truncate text-[12px] leading-tight text-mist-500">{line.detail}</span>}
         </span>
         {line.hot && <span className="rounded-full bg-signal px-2.5 py-1 text-[11px] font-bold text-ink-950">{line.cta}</span>}
       </span>
+      {/* the result, clear at the bottom of the bubble */}
+      {line.result && (
+        <span
+          className={cn(
+            "flex items-center justify-center gap-2 py-2.5 font-display text-[17px] font-extrabold tracking-tight",
+            line.result === "won" && "bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-950",
+            line.result === "lost" && "bg-live text-white",
+            line.result === "draw" && "bg-white/15 text-white",
+          )}
+        >
+          {line.result === "won" ? <Crown className="size-[18px]" fill="currentColor" strokeWidth={1.5} /> : line.result === "lost" ? <X className="size-[18px]" strokeWidth={3} /> : <Equal className="size-[18px]" strokeWidth={3} />}
+          {line.text}
+        </span>
+      )}
     </>
   );
 }
