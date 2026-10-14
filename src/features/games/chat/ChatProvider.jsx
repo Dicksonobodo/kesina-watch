@@ -29,8 +29,14 @@ function mergeMessages(current, incoming) {
 
 export function ChatProvider({ children }) {
   const { user } = useAuth();
-  const { profile } = useGames();
+  const { profile, toast } = useGames();
   const meUid = profile?.uid ?? null; // the id the server knows this player by
+  const meRef = useRef(null);
+  const toastRef = useRef(toast);
+  const seenRef = useRef(null); // chat → lastAt already seen (for "new message" notifications)
+  const openThreadRef = useRef(null);
+  meRef.current = meUid;
+  toastRef.current = toast;
   const [open, setOpen] = useState(false);
   const [view, setView] = useState("list"); // list | thread
   const [inbox, setInbox] = useState([]);
@@ -67,6 +73,16 @@ export function ChatProvider({ children }) {
       if (r.inbox) {
         setInbox(r.inbox);
         vRef.current = r.v;
+        // A pop-up for anything new that arrived while you weren't looking at that conversation.
+        const seen = seenRef.current;
+        seenRef.current = new Map(r.inbox.map((c) => [c.chat, c.lastAt]));
+        if (seen) {
+          for (const c of r.inbox) {
+            const fresh = c.lastAt > (seen.get(c.chat) ?? 0) && c.last.from !== meRef.current && c.unread > 0;
+            const watching = openRef.current && viewRef.current === "thread" && chatRef.current === c.chat;
+            if (fresh && !watching) toastRef.current?.({ title: c.peer.name, body: c.last.text, icon: c.peer.avatar, onClick: () => openThreadRef.current?.(c.peer) });
+          }
+        }
       }
       if (r.thread && r.thread.chat === chatRef.current) {
         const max = r.thread.messages.reduce((n, m) => Math.max(n, m.upd ?? m.at), sinceRef.current);
@@ -88,7 +104,7 @@ export function ChatProvider({ children }) {
       await sync();
       if (!alive.current) return;
       const hidden = document.hidden;
-      const delay = hidden ? 60_000 : open && view === "thread" ? 2_000 : open ? 6_000 : 20_000;
+      const delay = hidden ? 60_000 : open && view === "thread" ? 2_000 : open ? 5_000 : 8_000;
       timer.current = setTimeout(loop, delay);
     };
     clearTimeout(timer.current);
@@ -138,6 +154,8 @@ export function ChatProvider({ children }) {
       setThread((t) => ({ ...t, loading: false }));
     }
   }, [sync]);
+
+  openThreadRef.current = openThread;
 
   const send = useCallback(
     async (body) => {
@@ -191,16 +209,23 @@ export function ChatProvider({ children }) {
     await gamesApi("chat.report", { chat: chatRef.current, reason });
   }, []);
 
-  /** Starts a game in the open conversation and opens it full screen. */
+  /** Starts a game with the person in the open conversation: you play first, then it's sent. */
   const startGame = useCallback(async (type) => {
     if (!peer) return;
     const r = await gamesApi("cg.create", { peer: peer.uid, type });
-    sinceRef.current = Math.max(sinceRef.current - 1, 0);
-    setThread((t) => ({ ...t, chat: t.chat ?? r.chat, messages: mergeMessages(t.messages, [r.message]) }));
     chatRef.current = chatRef.current ?? r.chat;
+    setThread((t) => ({ ...t, chat: t.chat ?? r.chat }));
     setGameId(r.game.id);
     return r;
   }, [peer]);
+
+  /** After you send your turn: close the game and show the conversation with the new bubble. */
+  const backToChat = useCallback(() => {
+    setGameId(null);
+    setOpen(true);
+    vRef.current = -1;
+    setTimeout(() => sync(), 50);
+  }, [sync]);
 
   /** Another page (the battle waiting room) asks to send a join code to a friend. */
   const shareInvite = useCallback((invite) => {
@@ -211,8 +236,8 @@ export function ChatProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ open, view, inbox, unread, peer, thread, gameId, setGameId, pendingInvite, setPendingInvite, error, setError, openPanel, closePanel, showList, openThread, send, react, unsend, setTyping, block, report, startGame, shareInvite, me: meUid }),
-    [open, view, inbox, unread, peer, thread, gameId, pendingInvite, error, openPanel, closePanel, showList, openThread, send, react, unsend, setTyping, block, report, startGame, shareInvite, meUid],
+    () => ({ open, view, inbox, unread, peer, thread, gameId, setGameId, pendingInvite, setPendingInvite, error, setError, openPanel, closePanel, showList, openThread, send, react, unsend, setTyping, block, report, startGame, backToChat, shareInvite, me: meUid }),
+    [open, view, inbox, unread, peer, thread, gameId, pendingInvite, error, openPanel, closePanel, showList, openThread, send, react, unsend, setTyping, block, report, startGame, backToChat, shareInvite, meUid],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

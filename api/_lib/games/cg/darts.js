@@ -4,9 +4,10 @@ import { GameError } from "../util.js";
  * Darts, 301. Three darts a turn; every dart takes its score off your total and you win by landing
  * exactly on zero (go below zero and the turn is a bust: your score goes back to where it started).
  *
- * You choose where to aim; the server decides where the dart really lands (a little wobble that
- * gets bigger on a wild aim), and works out the score from the landing spot. Positions are
- * measured from the centre of the board in units where the outer edge of the double ring is 1.
+ * There is no aiming cross-hair: you flick the dart. The flick's direction decides left and right,
+ * its speed decides how high it lands (too soft drops short, too hard sails over), and a little
+ * wobble is added here. Positions are measured from the centre of the board in units where the
+ * outer edge of the double ring is 1.
  */
 
 const START = 301;
@@ -31,6 +32,27 @@ export function scoreAt(x, y) {
   return { score: value, label: String(value), ring: "single" };
 }
 
+/**
+ * Where a flick sends the dart. flick = { x0, y0, dx, dy, ms }: the release point in board units,
+ * and how far the finger moved (in board widths) over the last `ms` milliseconds before letting go.
+ * Speed (board widths a second) sets the height: about 4.5 hits the middle, 2 the bottom edge,
+ * 7 the top edge. The direction of the flick sets where it goes sideways.
+ */
+export function aimFromFlick(flick) {
+  if (!flick || typeof flick !== "object") return null;
+  const num = (v, lo, hi) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Number(v))) : null);
+  const x0 = num(flick.x0, -1.4, 1.4);
+  const y0 = num(flick.y0, -2.6, 1.4);
+  const dx = num(flick.dx, -3, 3);
+  const dy = num(flick.dy, -3, 3);
+  const ms = num(flick.ms, 16, 600);
+  if ([x0, y0, dx, dy, ms].includes(null) || dy >= -0.02) return null; // it has to go up
+  const speed = -dy / (ms / 1000);
+  const y = Math.max(-2, Math.min(2, (speed - 4.5) * 0.4));
+  const x = Math.max(-2, Math.min(2, x0 + (dx / -dy) * Math.max(0.2, y - y0)));
+  return [x, y];
+}
+
 const gaussian = () => {
   let u = 0;
   while (u === 0) u = Math.random();
@@ -38,7 +60,7 @@ const gaussian = () => {
 };
 
 export function create(players) {
-  const first = players[Math.floor(Math.random() * 2)];
+  const first = players[0]; // whoever starts the game throws first
   return {
     state: { left: Object.fromEntries(players.map((p) => [p, START])), turnStart: START, thrown: [], history: [], dartsLeft: 3, log: [{ by: null, text: `First to zero from ${START}. Three darts a turn.` }] },
     secret: {},
@@ -56,11 +78,10 @@ export function move(g, uid, body) {
   if (g.turn !== uid) throw new GameError("It isn't your turn.");
   if (body.do !== "throw") throw new GameError("Unknown move.");
   const s = g.state;
-  const ax = Number(body.x);
-  const ay = Number(body.y);
-  if (!Number.isFinite(ax) || !Number.isFinite(ay)) throw new GameError("Aim at the board.");
-  const reach = Math.hypot(ax, ay);
-  if (reach > 1.25) throw new GameError("Aim at the board.");
+  const aim = aimFromFlick(body.flick);
+  if (!aim) throw new GameError("Flick the dart up towards the board.");
+  const [ax, ay] = aim;
+  const reach = Math.min(1.25, Math.hypot(ax, ay));
 
   // The wobble: small near the middle of the board, bigger when aiming for the edges.
   const spread = 0.022 + reach * 0.03;

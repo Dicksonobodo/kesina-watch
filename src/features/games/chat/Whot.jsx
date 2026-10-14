@@ -9,6 +9,9 @@ import { Banner } from "./GameHost";
  */
 
 const SHAPES = ["circle", "triangle", "cross", "square", "star"];
+const CODE = { o: "circle", t: "triangle", x: "cross", s: "square", r: "star", w: "whot" };
+/** "o5" → circle 5, "w20a" → Whot (same codes as the server). */
+export const cardOf = (id) => ({ id, shape: CODE[id[0]], n: Number(id.slice(1).replace(/[a-z]$/, "")) });
 const COLOR = { circle: "#dc2626", triangle: "#16a34a", cross: "#2563eb", square: "#d97706", star: "#c026d3" };
 const RULES = [
   ["1", "Hold on", "play again"],

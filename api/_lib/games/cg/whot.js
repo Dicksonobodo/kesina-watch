@@ -42,7 +42,7 @@ export function create(players) {
   // The first card on the table is a plain one (no special effects).
   let start = deck.findIndex((id) => !SPECIAL.has(cardOf(id).n));
   const [top] = deck.splice(start, 1);
-  const first = players[Math.floor(Math.random() * 2)];
+  const first = players[0]; // whoever starts the game plays first, then sends it
   return {
     state: { top, pile: [top], demand: null, pending: { rank: 0, count: 0 }, log: [{ by: null, text: "Game on! Match the shape or the number." }], marketCount: deck.length, counts: Object.fromEntries(players.map((p) => [p, START_HAND])) },
     secret: { hands, deck },
@@ -172,5 +172,5 @@ export function move(g, uid, body) {
   throw new GameError("Unknown move.");
 }
 
-export const card = (g) => ({ counts: g.state.counts });
+export const card = (g) => ({ counts: g.state.counts, top: g.state.top });
 export const title = "Naija Whot";

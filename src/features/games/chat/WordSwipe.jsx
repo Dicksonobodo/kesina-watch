@@ -60,7 +60,8 @@ function Waiting({ game }) {
   const opp = game.players.find((p) => p.uid !== game.me);
   return (
     <div className="mx-auto max-w-sm px-6 py-10 text-center">
-      <p className="font-mono text-[11px] tracking-[.2em] text-mist-500 uppercase">Your round</p>
+      <p className="inline-flex items-center gap-1.5 rounded-full bg-signal px-3 py-1 text-xs font-bold text-ink-950">✓ Sent</p>
+      <p className="mt-3 font-mono text-[11px] tracking-[.2em] text-white/60 uppercase">Your round</p>
       <p className="mt-2 font-display text-6xl font-extrabold text-signal tabular-nums">{game.myScore.toLocaleString()}</p>
       <p className="mt-1 text-sm text-mist-500">{game.myWords.length} words</p>
       <div className="mt-6 flex flex-wrap justify-center gap-1.5">

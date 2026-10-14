@@ -1,6 +1,6 @@
 import { getStore, inc } from "./store.js";
 import { award } from "./profile.js";
-import { chatIdOf, postGame, touchGame } from "./chat.js";
+import { canMessage, chatIdOf, postGame, touchGame } from "./chat.js";
 import * as swipe from "./cg/swipe.js";
 import * as whot from "./cg/whot.js";
 import * as darts from "./cg/darts.js";
@@ -51,7 +51,8 @@ export async function createGame(identity, { peer, type }) {
   const [me, them] = await Promise.all([store.get(`dir/${identity.uid}`), store.get(`dir/${peer}`)]);
   if (!me) throw new GameError("Open the Game Zone once so friends can find you, then try again.");
   if (!them || peer === identity.uid) throw new GameError("That player wasn't found.", 404);
-  const players = [identity.uid, peer];
+  await canMessage(identity, peer); // blocked either way? say so before anything is made
+  const players = [identity.uid, peer]; // the one who starts the game plays first
   const made = m.create(players);
   const id = newId(10);
   const g = {
@@ -69,10 +70,9 @@ export async function createGame(identity, { peer, type }) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
-  await store.set(path(id), g);
-  const posted = await postGame(identity, peer, cardOf(g)); // checks blocks too
-  await store.update(path(id), { msgId: posted.msgId });
-  return { game: viewOf({ ...g, msgId: posted.msgId }, identity.uid), message: posted.message, chat: posted.chat };
+  // Like iMessage: the game only appears in the conversation once you've played your turn.
+  await store.set(path(id), { ...g, msgId: null });
+  return { game: viewOf(g, identity.uid), chat: g.chatId };
 }
 
 export async function getGame(identity, id, v = -1) {
@@ -107,6 +107,7 @@ export async function moveGame(identity, id, body) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const g = await load(store, identity, id);
     const m = GAMES[g.type];
+    const turnBefore = g.turn;
     const result = m.move(g, identity.uid, body);
     if (result.ended) {
       g.status = "done";
@@ -117,12 +118,18 @@ export async function moveGame(identity, id, body) {
     if (!(await store.cas(path(id), { v: g.v }, patch))) continue; // the other player moved at the same moment: try again on fresh data
     g.v += 1;
     const done = g.status === "done";
-    const [rewardsByUid] = await Promise.all([done ? rewards(g) : null, g.msgId ? touchGame(g.chatId, g.msgId, cardOf(g)).catch(() => {}) : null]);
-    // Poke the other player's chat counter so their list updates quickly.
     const other = g.players.find((p) => p !== identity.uid);
-    if (g.status === "playing" && g.turn === other && result.changed) await store.set(`chatmeta/${other}`, { v: inc(1) }, { merge: true }).catch(() => {});
-    else if (done) await store.set(`chatmeta/${other}`, { v: inc(1) }, { merge: true }).catch(() => {});
-    return { game: viewOf(g, identity.uid), result: { dart: result.dart ?? null, bust: Boolean(result.bust) }, reward: rewardsByUid?.[identity.uid] ?? null };
+    // A turn handed over (or the game finished, or a Word Swipe round played): send it into the chat.
+    const handoff = done || (turnBefore === identity.uid && g.turn === other) || (g.type === "swipe" && body.type === "submit");
+    const deliverToChat = async () => {
+      if (handoff) {
+        const posted = await postGame(identity, other, cardOf(g), g.msgId);
+        g.msgId = posted.msgId;
+        await store.update(path(id), { msgId: posted.msgId });
+      } else if (g.msgId) await touchGame(g.chatId, g.msgId, cardOf(g));
+    };
+    const [rewardsByUid] = await Promise.all([done ? rewards(g) : null, deliverToChat().catch(() => {})]);
+    return { game: viewOf(g, identity.uid), result: { dart: result.dart ?? null, bust: Boolean(result.bust) }, sent: handoff, reward: rewardsByUid?.[identity.uid] ?? null };
   }
   throw new GameError("That took too long. Try again.", 409);
 }

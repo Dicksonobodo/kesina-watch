@@ -88,12 +88,13 @@ function Toasts({ items }) {
             initial={{ opacity: 0, y: 20, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10 }}
-            className="glass-strong pointer-events-auto flex items-center gap-3 rounded-2xl px-4 py-3 shadow-2xl shadow-black/50"
+            onClick={t.onClick}
+            className={`glass-strong pointer-events-auto flex max-w-sm items-center gap-3 rounded-2xl px-4 py-3 shadow-2xl shadow-black/50 ${t.onClick ? "cursor-pointer" : ""}`}
           >
             <span className="grid size-10 place-items-center rounded-xl bg-signal/15 text-xl">{t.icon ?? (t.kind === "level" ? <Trophy className="size-5 text-signal" /> : <Sparkles className="size-5 text-signal" />)}</span>
             <span>
               <span className="block text-sm font-bold">{t.title}</span>
-              <span className="block text-xs text-mist-500">{t.body}</span>
+              <span className="line-clamp-2 block text-xs text-mist-500">{t.body}</span>
             </span>
           </motion.div>
         ))}

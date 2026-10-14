@@ -7,6 +7,7 @@ import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
 import { useChat } from "./ChatProvider";
 import { CHAT_GAMES, gameCardLine } from "./gameInfo";
+import { cardOf as whotCardOf, WhotCard } from "./Whot";
 
 /*
  * The chat window of the Game Zone: a bottom sheet on phones (about 60% of the screen, so the
@@ -503,8 +504,13 @@ function Bubble({ m, first, last, me, peer }) {
               <span className="rounded-full bg-signal px-3 py-1 text-xs font-bold text-ink-950">{mine ? "Open" : "Join"}</span>
             </span>
           </button>
+        ) : m.type === "game" && m.game && m.stale ? (
+          // an earlier turn of a game: a small line, the newest turn is further down
+          <button onClick={() => setGameId(m.game.id)} className="flex items-center gap-1.5 rounded-full bg-white/[.05] px-3 py-1.5 text-[12px] text-mist-500 ring-1 ring-white/[.06] transition hover:text-mist-300">
+            <span>{CHAT_GAMES.find((g) => g.id === m.game.type)?.emoji}</span> {m.game.title} · {mine ? "you played" : `${peer?.name ?? "they"} played`}
+          </button>
         ) : m.type === "game" && m.game ? (
-          <button onClick={() => setGameId(m.game.id)} className={cn("w-60 overflow-hidden rounded-[20px] text-left ring-1 transition active:scale-[.98]", tail, mine ? "bg-signal/15 ring-signal/40" : "bg-white/[.07] ring-white/10")}>
+          <button onClick={() => setGameId(m.game.id)} className={cn("block w-60 overflow-hidden rounded-[22px] text-left ring-1 shadow-lg shadow-black/30 transition active:scale-[.98]", tail, "bg-ink-800 ring-white/10")}>
             <GameCard game={m.game} me={me} peer={peer} />
           </button>
         ) : (
@@ -565,20 +571,84 @@ function GameCard({ game, me, peer }) {
   const line = gameCardLine(game, me, peer?.name);
   return (
     <>
-      <span className="block h-1.5" style={{ background: info.color }} />
-      <span className="flex items-center gap-3 px-3.5 pt-3">
-        <span className="grid size-11 place-items-center rounded-xl text-2xl" style={{ background: info.color }}>
+      <span className="relative block h-36 overflow-hidden" style={{ background: info.table }}>
+        <GamePreview game={game} me={me} peer={peer} />
+      </span>
+      <span className="flex items-center gap-2.5 bg-white/[.06] px-3 py-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg text-base" style={{ background: info.color }}>
           {info.emoji}
         </span>
-        <span className="min-w-0">
-          <span className="block truncate text-[14px] font-bold">{game.title}</span>
-          <span className="block text-[11px] text-mist-500">{info.blurb}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] leading-tight font-bold">{game.title}</span>
+          <span className={cn("block truncate text-[12px] leading-tight", line.hot ? "font-semibold text-signal" : "text-mist-500")}>{line.text}</span>
         </span>
+        {line.hot && <span className="rounded-full bg-signal px-2.5 py-1 text-[11px] font-bold text-ink-950">{line.cta}</span>}
       </span>
-      <span className="mt-2.5 flex items-center justify-between gap-2 border-t border-white/10 px-3.5 py-2.5">
-        <span className={cn("text-[13px] font-semibold", line.hot ? "text-signal" : "text-mist-300")}>{line.text}</span>
-        <span className="rounded-full bg-signal px-3 py-1 text-xs font-bold text-ink-950">{line.cta}</span>
+    </>
+  );
+}
+
+/** The picture in a game bubble: the state of the game at that turn. */
+function GamePreview({ game, me, peer }) {
+  const other = (obj) => Object.keys(obj ?? {}).find((u) => u !== me);
+  if (game.type === "darts") {
+    const left = game.left ?? {};
+    return (
+      <>
+        <svg viewBox="-1.3 -1.3 2.6 2.6" className="absolute top-1/2 left-1/2 size-36 -translate-x-1/2 -translate-y-1/2 opacity-90">
+          <circle r="1.25" fill="#0b0b0f" />
+          {[1, 0.95, 0.63, 0.58, 0.094].map((r, i) => (
+            <circle key={r} r={r} fill={["#1b8a3a", "#efe2bf", "#c62828", "#efe2bf", "#1b8a3a"][i]} />
+          ))}
+          {Array.from({ length: 10 }).map((_, i) => (
+            <path key={i} d={`M0 0 L${Math.sin(((i * 36 - 9) * Math.PI) / 180) * 0.95} ${-Math.cos(((i * 36 - 9) * Math.PI) / 180) * 0.95} A.95 .95 0 0 1 ${Math.sin(((i * 36 + 9) * Math.PI) / 180) * 0.95} ${-Math.cos(((i * 36 + 9) * Math.PI) / 180) * 0.95}Z`} fill="#161616" />
+          ))}
+          <circle r="0.04" fill="#c62828" />
+        </svg>
+        <span className="absolute inset-x-2 bottom-2 flex justify-between gap-2">
+          {[["You", left[me]], [peer?.name ?? "Them", left[other(left)]]].map(([n, v]) => (
+            <span key={n} className="rounded-lg bg-black/65 px-2 py-0.5 text-center backdrop-blur">
+              <span className="block max-w-20 truncate text-[9px] text-mist-300">{n}</span>
+              <span className="block font-display text-base leading-none font-extrabold tabular-nums">{v ?? 301}</span>
+            </span>
+          ))}
+        </span>
+      </>
+    );
+  }
+  if (game.type === "whot") {
+    const counts = game.counts ?? {};
+    const top = game.top ? whotCardOf(game.top) : null;
+    return (
+      <>
+        <span className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-3">
+          <span className="-rotate-6"><WhotCard back size="md" /></span>
+          {top && <span className="rotate-6"><WhotCard card={top} size="md" /></span>}
+        </span>
+        <span className="absolute inset-x-2 bottom-2 flex justify-between text-[10px] font-semibold">
+          <span className="rounded-full bg-black/55 px-2 py-0.5">You · {counts[me] ?? 6} cards</span>
+          <span className="rounded-full bg-black/55 px-2 py-0.5">{peer?.name ?? "Them"} · {counts[other(counts)] ?? 6}</span>
+        </span>
+      </>
+    );
+  }
+  // word swipe
+  const scores = game.scores ?? {};
+  const mine = scores[me];
+  return (
+    <>
+      <span className="absolute top-1/2 left-1/2 grid -translate-x-1/2 -translate-y-1/2 grid-cols-4 gap-1">
+        {"WORDSWIPEGAME?!?".split("").map((c, i) => (
+          <span key={i} className={cn("grid size-6 place-items-center rounded-md font-display text-[11px] font-extrabold", [0, 5, 10, 15].includes(i) ? "bg-signal text-ink-950" : "bg-white/15 text-white")}>
+            {c}
+          </span>
+        ))}
       </span>
+      {mine != null && (
+        <span className="absolute inset-x-2 bottom-2 flex justify-center">
+          <span className="rounded-full bg-black/60 px-2.5 py-0.5 text-[11px] font-bold">You scored {mine.toLocaleString()}</span>
+        </span>
+      )}
     </>
   );
 }

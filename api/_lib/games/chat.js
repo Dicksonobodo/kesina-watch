@@ -96,7 +96,7 @@ export async function searchPeople(identity, q) {
 
 /* ---------- reading ---------- */
 
-const view = (m) => ({ id: m.id, from: m.from, at: m.at, upd: m.upd, type: m.type, text: m.deleted ? "" : m.text ?? "", invite: m.deleted ? null : m.invite ?? null, game: m.deleted ? null : m.game ?? null, reactions: m.deleted ? {} : m.reactions ?? {}, deleted: Boolean(m.deleted) });
+const view = (m) => ({ id: m.id, from: m.from, at: m.at, upd: m.upd, type: m.type, stale: Boolean(m.stale), text: m.deleted ? "" : m.text ?? "", invite: m.deleted ? null : m.invite ?? null, game: m.deleted ? null : m.game ?? null, reactions: m.deleted ? {} : m.reactions ?? {}, deleted: Boolean(m.deleted) });
 
 async function requireChat(store, identity, chatId) {
   const chat = await store.get(`chats/${chatId}`);
@@ -207,7 +207,10 @@ async function resolvePeer(store, identity, { peer, chat }) {
   return peerUid;
 }
 
-const newMessageId = () => `${Date.now().toString(36).padStart(9, "0")}${newId(4)}`;
+// Always moving forward, even for two messages in the same millisecond, so the order never flips.
+let lastStamp = 0;
+const stamp = () => (lastStamp = Math.max(Date.now(), lastStamp + 1));
+const newMessageId = (at) => `${at.toString(36).padStart(9, "0")}${newId(4)}`;
 
 export async function sendMessage(identity, body) {
   rateLimit(`chatsend:${identity.uid}`, 40);
@@ -215,8 +218,8 @@ export async function sendMessage(identity, body) {
   await syncDirectory(identity);
   const peerUid = await resolvePeer(store, identity, body);
   const chatId = chatIdOf(identity.uid, peerUid);
-  const now = Date.now();
-  const msg = { id: newMessageId(), from: identity.uid, at: now, upd: now, type: "text", text: "" };
+  const now = stamp();
+  const msg = { id: newMessageId(now), from: identity.uid, at: now, upd: now, type: "text", text: "" };
   let preview;
 
   if (body.kind === "invite") {
@@ -236,22 +239,38 @@ export async function sendMessage(identity, body) {
   return { chat: chatId, message: view(msg) };
 }
 
-/** Called by the chat-games module: puts a game card into the conversation. */
-export async function postGame(identity, peerUid, game) {
+/** Can this person message that one? (throws the reason if not) */
+export async function canMessage(identity, peerUid) {
+  const store = await getStore();
+  await syncDirectory(identity);
+  await resolvePeer(store, identity, { peer: peerUid });
+}
+
+const GAME_EMOJI = { swipe: "🔤", whot: "🃏", darts: "🎯" };
+
+/**
+ * Called by the chat-games module each time a turn is handed over: a new game bubble arrives at
+ * the bottom of the conversation (like iMessage), and the previous one is marked as an older move.
+ */
+export async function postGame(identity, peerUid, game, previousMsgId = null) {
   const store = await getStore();
   await syncDirectory(identity);
   await resolvePeer(store, identity, { peer: peerUid });
   const chatId = chatIdOf(identity.uid, peerUid);
-  const now = Date.now();
-  const msg = { id: newMessageId(), from: identity.uid, at: now, upd: now, type: "game", text: "", game };
-  await deliver(store, identity, chatId, peerUid, msg, `${game.title} · your turn`);
+  const now = stamp();
+  const msg = { id: newMessageId(now), from: identity.uid, at: now, upd: now, type: "game", text: "", game };
+  const preview = `${GAME_EMOJI[game.type] ?? "🎮"} ${game.title}${game.status === "done" ? " · game over" : ""}`;
+  await Promise.all([
+    deliver(store, identity, chatId, peerUid, msg, preview),
+    previousMsgId ? store.update(`chatmsg_${chatId}/${previousMsgId}`, { stale: true, upd: now }).catch(() => {}) : null,
+  ]);
   return { chat: chatId, message: view(msg), msgId: msg.id };
 }
 
 /** A game changed (a move was made): refresh its card in the conversation so both sides see it. */
 export async function touchGame(chatId, msgId, patch) {
   const store = await getStore();
-  await store.update(`chatmsg_${chatId}/${msgId}`, { upd: Date.now(), ...Object.fromEntries(Object.entries(patch).map(([k, v]) => [`game.${k}`, v])) });
+  await store.update(`chatmsg_${chatId}/${msgId}`, { upd: stamp(), ...Object.fromEntries(Object.entries(patch).map(([k, v]) => [`game.${k}`, v])) });
 }
 
 export async function reactTo(identity, chatId, msgId, emoji) {
@@ -263,7 +282,7 @@ export async function reactTo(identity, chatId, msgId, emoji) {
   const m = await store.get(path);
   if (!m || m.deleted) throw new GameError("That message was not found.", 404);
   const same = m.reactions?.[identity.uid] === emoji;
-  await store.update(path, { [`reactions.${identity.uid}`]: same ? remove() : emoji, upd: Date.now() });
+  await store.update(path, { [`reactions.${identity.uid}`]: same ? remove() : emoji, upd: stamp() });
   return { ok: true };
 }
 
@@ -274,7 +293,7 @@ export async function unsendMessage(identity, chatId, msgId) {
   const path = `chatmsg_${chatId}/${msgId}`;
   const m = await store.get(path);
   if (!m || m.from !== identity.uid) throw new GameError("You can only unsend your own messages.", 403);
-  await store.update(path, { deleted: true, text: "", invite: null, upd: Date.now() });
+  await store.update(path, { deleted: true, text: "", invite: null, upd: stamp() });
   return { ok: true };
 }
 
