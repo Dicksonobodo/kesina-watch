@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -10,6 +10,7 @@ import { db } from "@/lib/firebase";
 import { cn } from "@/lib/cn";
 import { useGames } from "./GamesProvider";
 import { GameArt } from "./art";
+import { QuestionMeta } from "./QuizGame";
 import { Card, ErrorNote, Eyebrow, OptionButton, PlayerChip } from "./ui";
 
 /*
@@ -20,11 +21,21 @@ import { Card, ErrorNote, Eyebrow, OptionButton, PlayerChip } from "./ui";
 
 /* ---------- lobby ---------- */
 
+// What can be played head to head.
+const BATTLE_GAMES = [
+  { id: "quiz", title: "Football IQ quiz", desc: "Mixed football trivia", art: "quiz", levels: true },
+  { id: "shirt", title: "Shirt numbers", desc: "Which number does he wear?", art: "shirt" },
+  { id: "clubs", title: "Who played for both?", desc: "Two clubs, one player", art: "clubs" },
+  { id: "trophy", title: "Name the trophy", desc: "Guess it from the clue", art: "trophy" },
+  { id: "xi", title: "Complete the XI", desc: "Fill the missing players", art: "xi" },
+];
+
 export function BattleLobby() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { profile } = useGames();
   const [difficulty, setDifficulty] = useState("mixed");
+  const [kind, setKind] = useState("quiz");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -68,20 +79,43 @@ export function BattleLobby() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-4 gap-2">
-        {[["easy", "Easy"], ["mixed", "Mixed"], ["medium", "Medium"], ["hard", "Hard"]].map(([id, label]) => (
-          <button key={id} onClick={() => setDifficulty(id)} className={cn("rounded-2xl px-2 py-2.5 text-sm font-semibold ring-1 transition", difficulty === id ? "bg-signal/10 text-signal ring-signal/60" : "bg-white/[.03] text-mist-300 ring-white/[.08] hover:bg-white/[.06]")}>
-            {label}
+      {/* 1. pick the game */}
+      <Eyebrow className="mt-6 mb-3">1 · Pick a game</Eyebrow>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {BATTLE_GAMES.map((g) => (
+          <button
+            key={g.id}
+            onClick={() => setKind(g.id)}
+            aria-pressed={kind === g.id}
+            className={cn("overflow-hidden rounded-2xl text-left ring-1 transition", kind === g.id ? "ring-2 ring-signal" : "ring-white/[.08] hover:ring-white/25")}
+          >
+            <GameArt id={g.art} className={cn("h-20", kind !== g.id && "opacity-70")} />
+            <span className="block px-3 py-2.5">
+              <span className={cn("block text-[13px] leading-tight font-semibold", kind === g.id && "text-signal")}>{g.title}</span>
+              <span className="mt-0.5 block text-[11px] leading-tight text-mist-500">{g.desc}</span>
+            </span>
           </button>
         ))}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      {BATTLE_GAMES.find((g) => g.id === kind)?.levels && (
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {[["easy", "Easy"], ["mixed", "Mixed"], ["medium", "Medium"], ["hard", "Hard"]].map(([id, label]) => (
+            <button key={id} onClick={() => setDifficulty(id)} className={cn("rounded-2xl px-2 py-2.5 text-sm font-semibold ring-1 transition", difficulty === id ? "bg-signal/10 text-signal ring-signal/60" : "bg-white/[.03] text-mist-300 ring-white/[.08] hover:bg-white/[.06]")}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <Eyebrow className="mt-6 mb-3">2 · Find someone to play</Eyebrow>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <Card className="flex flex-col">
           <Zap className="size-6 text-signal" />
           <h3 className="mt-3 font-display text-lg font-bold">Quick match</h3>
-          <p className="mt-1 flex-1 text-sm text-mist-500">We pair you with someone around your level{profile ? ` (you're level ${profile.level})` : ""}.</p>
-          <Button className="mt-4" onClick={() => go("quick", "battle.quick", { difficulty })} loading={busy === "quick"}>
+          <p className="mt-1 flex-1 text-sm text-mist-500">We pair you with someone around your level{profile ? ` (you're level ${profile.level})` : ""} who picked the same game.</p>
+          <Button className="mt-4" onClick={() => go("quick", "battle.quick", { difficulty, kind })} loading={busy === "quick"}>
             Find opponent
           </Button>
         </Card>
@@ -89,7 +123,7 @@ export function BattleLobby() {
           <Swords className="size-6 text-signal" />
           <h3 className="mt-3 font-display text-lg font-bold">Challenge a friend</h3>
           <p className="mt-1 flex-1 text-sm text-mist-500">Make a private room and send them the code or link.</p>
-          <Button className="mt-4" variant="ghost" onClick={() => go("create", "battle.create", { difficulty })} loading={busy === "create"}>
+          <Button className="mt-4" variant="ghost" onClick={() => go("create", "battle.create", { difficulty, kind })} loading={busy === "create"}>
             Create room
           </Button>
         </Card>
@@ -198,6 +232,15 @@ export function BattleRoom() {
   const [copied, setCopied] = useState(false);
   const ticking = useRef(0);
   const myId = profile?.uid;
+  // Complete the XI: names already revealed in earlier questions fill their places in the line-up.
+  const filled = useMemo(() => {
+    const out = {};
+    for (const r of room?.reveals ?? []) {
+      const q = room.qs[r.qi];
+      if (q?.meta?.kind === "xi") out[q.meta.slot] = q.options[r.answer];
+    }
+    return out;
+  }, [room?.reveals, room?.qs]);
   const oppId = room?.memberIds?.find((m) => m !== myId);
   const me = room?.players?.[myId];
   const opp = oppId ? room.players[oppId] : null;
@@ -264,7 +307,8 @@ export function BattleRoom() {
       <div className="mx-auto max-w-md text-center">
         <Card>
           <Spinner className="mx-auto size-6 text-signal" />
-          <h2 className="mt-4 font-display text-2xl font-bold">{room.public ? "Finding an opponent…" : "Waiting for your friend"}</h2>
+          {room.title && <p className="mt-4 inline-block rounded-full bg-signal/10 px-3 py-1 font-mono text-[11px] font-semibold tracking-wider text-signal uppercase ring-1 ring-signal/30">{room.title}</p>}
+          <h2 className="mt-3 font-display text-2xl font-bold">{room.public ? "Finding an opponent…" : "Waiting for your friend"}</h2>
           <p className="mt-2 text-sm text-mist-500">{room.public ? "Looking for someone around your level." : "Send them this code or link. The battle starts the moment they join."}</p>
           {room.public && now - room.createdAt > 45_000 && <p className="mt-3 text-sm text-mist-300">Nobody is online at your level right now. Cancel and challenge a friend with a code instead, or keep waiting.</p>}
           {!room.public && (
@@ -392,7 +436,8 @@ export function BattleRoom() {
       ) : (
         <motion.div key={room.idx} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-5">
           <Card>
-            <span className="rounded-full bg-white/[.06] px-2.5 py-1 font-mono text-[10px] tracking-wider text-mist-300 uppercase">{q.category.replace(/-/g, " ")}</span>
+            <QuestionMeta q={q} filled={filled} />
+            <span className="rounded-full bg-white/[.06] px-2.5 py-1 font-mono text-[10px] tracking-wider text-mist-300 uppercase">{room.title ? `${room.title} · ` : ""}{q.category.replace(/-/g, " ")}</span>
             <h2 className="mt-4 font-display text-[clamp(20px,3.4vw,26px)] leading-snug font-bold tracking-tight text-balance">{q.text}</h2>
             <div className="mt-5 grid gap-2.5">
               {q.options.map((opt, i) => (

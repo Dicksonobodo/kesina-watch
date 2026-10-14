@@ -82,7 +82,7 @@ function genericStats(hs, as) {
 function eventKind(type = "") {
   if (/own goal/i.test(type)) return "own-goal";
   if (/penalty.*(missed|saved)/i.test(type)) return "pen-miss";
-  if (/goal/i.test(type)) return "goal";
+  if (/goal|penalty.*scored/i.test(type)) return "goal";
   if (/red card/i.test(type)) return "red";
   if (/yellow card/i.test(type)) return "yellow";
   if (/substitution/i.test(type)) return "sub";

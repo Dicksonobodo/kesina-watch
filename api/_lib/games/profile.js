@@ -151,9 +151,9 @@ export function viewProfile(p, identity) {
  * Gives XP and coins, updates the streak and stats, writes the boards and checks achievements.
  * `stats` adds to counters; `setStats` overwrites some (like a running streak of correct predictions).
  */
-export async function award(identity, { xp = 0, coins = 0, stats = {}, setStats = {}, game = true } = {}) {
+export async function award(identity, { xp = 0, coins = 0, stats = {}, setStats = {}, game = true, profile = null } = {}) {
   const store = await getStore();
-  const p = await getProfile(identity);
+  const p = profile ?? (await getProfile(identity));
   const today = dayKey();
   const week = weekKey();
   const before = levelFor(p.xp);
@@ -197,9 +197,10 @@ export async function award(identity, { xp = 0, coins = 0, stats = {}, setStats 
     if (!any) break;
   }
 
-  await store.set(`gp/${identity.uid}`, p);
+  // All three writes at once: every round-trip to the database costs time, so never queue them.
   const entry = { name: p.name, avatar: p.avatar, theme: p.theme };
   await Promise.all([
+    store.set(`gp/${identity.uid}`, p),
     store.set(`lb_weekly_${week}/${identity.uid}`, { ...entry, xp: p.weeklyXp }),
     store.set(`lb_all/${identity.uid}`, { ...entry, xp: p.xp }),
   ]);
@@ -215,6 +216,7 @@ export async function award(identity, { xp = 0, coins = 0, stats = {}, setStats 
     streak: p.streak,
     streakBonus,
     achievements: unlocked,
+    profile: { name: p.name, avatar: p.avatar, theme: p.theme },
   };
 }
 

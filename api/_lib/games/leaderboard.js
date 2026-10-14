@@ -1,4 +1,4 @@
-import { getStore, writeVersion } from "./store.js";
+import { getStore, inc, writeVersion } from "./store.js";
 import { dayKey, GameError, memo, msToWeekEnd, weekKey } from "./util.js";
 
 /*
@@ -48,7 +48,6 @@ export async function setBoardScore(name, identity, profile, value, { keepBest =
 export async function addBoardPoints(name, identity, profile, delta) {
   const board = BOARDS[name];
   const store = await getStore();
-  const path = `${board.collection()}/${identity.uid}`;
-  const current = await store.get(path);
-  await store.set(path, { name: profile.name, avatar: profile.avatar, theme: profile.theme, [board.field]: (current?.[board.field] ?? 0) + delta });
+  // One write: the database adds the points itself, so there is nothing to read first.
+  await store.set(`${board.collection()}/${identity.uid}`, { name: profile.name, avatar: profile.avatar, theme: profile.theme, [board.field]: inc(delta) }, { merge: true });
 }

@@ -57,6 +57,15 @@
   "functions": {
     "api/games.js": {
       "maxDuration": 30
+    },
+    "api/sports/leaders.js": {
+      "maxDuration": 30
+    },
+    "api/sports/player.js": {
+      "maxDuration": 30
     }
-  }
+  },
+  "regions": [
+    "iad1"
+  ]
 }

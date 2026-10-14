@@ -25,7 +25,7 @@ export const KINDS = {
 const BASE_POINTS = { easy: 80, medium: 100, hard: 130 };
 const GRACE_MS = 3000;
 
-async function questionsFor(kind, { difficulty, seed }) {
+export async function questionsFor(kind, { difficulty, seed }) {
   const { count } = KINDS[kind];
   const rng = seed ? rngFrom(seed) : Math.random;
   if (kind === "quiz") return buildQuiz({ difficulty, count });
@@ -87,6 +87,7 @@ export async function startSession(identity, { kind, difficulty = "mixed" }) {
     day: today,
   };
   await store.set(`sessions/${id}`, session);
+  remember(id, session);
   return { session: id, kind, title: spec.title, question: publicQuestion(session, 0) };
 }
 
@@ -98,9 +99,19 @@ export async function currentQuestion(identity, id) {
   return { session: id, kind: s.kind, title: KINDS[s.kind].title, question: publicQuestion(s, s.idx), score: s.score };
 }
 
+// The newest copy of a session this server instance wrote. It saves one slow database read per
+// answer; it is only trusted when it is exactly at the question being answered, otherwise we read.
+const recent = new Map();
+export const _recentSessions = recent; // exposed for tests only
+const remember = (id, s) => {
+  recent.set(id, s);
+  if (recent.size > 300) recent.delete(recent.keys().next().value);
+};
+
 export async function answerQuestion(identity, id, { index, choice }) {
   const store = await getStore();
-  const s = await store.get(`sessions/${id}`);
+  const cached = recent.get(id);
+  const s = cached && cached.idx === index && cached.status === "active" ? structuredClone(cached) : await store.get(`sessions/${id}`);
   if (!s || s.uid !== identity.uid) throw new GameError("That game wasn't found.", 404);
   if (s.status !== "active") throw new GameError("This game is already finished.");
   if (index !== s.idx) throw new GameError("That question was already answered.");
@@ -123,12 +134,14 @@ export async function answerQuestion(identity, id, { index, choice }) {
   if (s.idx < s.qs.length) {
     s.issuedAt = Date.now();
     await store.set(`sessions/${id}`, s);
+    remember(id, s);
     return { ...answered, score: s.score, next: publicQuestion(s, s.idx) };
   }
 
   s.status = "done";
-  await store.set(`sessions/${id}`, s);
-  const summary = await finish(identity, s);
+  recent.delete(id);
+  // Saving the finished session and paying out the rewards are independent: do them together.
+  const [, summary] = await Promise.all([store.set(`sessions/${id}`, s), finish(identity, s)]);
   return { ...answered, score: s.score, done: summary };
 }
 
@@ -142,24 +155,23 @@ async function finish(identity, s) {
   let coins = s.correct + (perfect ? 5 : 0);
 
   // Replays are fine, but XP and coins thin out after 12 games a day so nobody can farm them.
-  const row = await store.get(`daily_${s.day}/${identity.uid}`);
+  // (Both reads go out together: every round-trip to the database costs time.)
+  const [row, profile] = await Promise.all([store.get(`daily_${s.day}/${identity.uid}`), getProfile(identity)]);
   const plays = row?.plays ?? 0;
   if (plays >= 12) {
     xp = Math.round(xp * 0.2);
     coins = Math.round(coins * 0.2);
   }
-  await store.set(`daily_${s.day}/${identity.uid}`, { plays: plays + 1 }, { merge: true });
 
   const stats = { quizzes: 1, quizCorrect: s.correct };
   if (perfect) stats.perfectQuizzes = 1;
   if (isDaily) stats.dailyDone = 1;
-  const reward = await award(identity, { xp, coins, stats });
-
-  const profile = await getProfile(identity);
-  if (isDaily) {
-    await store.set(`daily_${s.day}/${identity.uid}`, { quiz: s.score, at: Date.now() }, { merge: true });
-    await addBoardPoints("daily", identity, profile, s.score);
-  }
+  // The database is far away, so the writes go out together instead of one after another.
+  const [reward] = await Promise.all([
+    award(identity, { xp, coins, stats, profile }),
+    store.set(`daily_${s.day}/${identity.uid}`, { plays: plays + 1, ...(isDaily ? { quiz: s.score, at: Date.now() } : {}) }, { merge: true }),
+  ]);
+  if (isDaily) await addBoardPoints("daily", identity, reward.profile, s.score);
   return { kind: s.kind, score: s.score, correct: s.correct, total, perfect, reward, results: s.results.map((r, i) => ({ ...r, answer: s.qs[i].answer, text: s.qs[i].text, options: s.qs[i].options })) };
 }
 

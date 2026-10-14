@@ -1,7 +1,7 @@
-import { buildQuiz } from "./questions.js";
+import { KINDS, questionsFor } from "./sessions.js";
 import { getStore, inc } from "./store.js";
 import { award, getProfile, levelFor } from "./profile.js";
-import { GameError, newId, rateLimit } from "./util.js";
+import { dayKey, GameError, rateLimit } from "./util.js";
 
 /*
  * Head-to-head battles: two players, the same 10 questions, speed counts.
@@ -13,8 +13,8 @@ import { GameError, newId, rateLimit } from "./util.js";
  * that moves the room forward, and all of it is safe to repeat.
  */
 
-const COUNT = 10;
-const SECONDS = 15;
+// What can be played head to head (same builders as the solo games). "daily" is solo only.
+export const BATTLE_KINDS = ["quiz", "shirt", "clubs", "trophy", "xi"];
 const COUNTDOWN_MS = 3500; // before the first question
 const REVEAL_MS = 3000; // pause between questions to show the answer
 const GRACE_MS = 2500;
@@ -44,8 +44,11 @@ function memberOnly(room, uid) {
   if (!room.memberIds.includes(uid)) throw new GameError("You're not in this room.", 403);
 }
 
-export async function createRoom(identity, { difficulty = "mixed", isPublic = false } = {}) {
+const kindOf = (kind) => (BATTLE_KINDS.includes(kind) ? kind : "quiz");
+
+export async function createRoom(identity, { difficulty = "mixed", isPublic = false, kind = "quiz" } = {}) {
   rateLimit(`room:${identity.uid}`, 10);
+  kind = kindOf(kind);
   const store = await getStore();
   const code = await freshCode(store);
   const me = await playerEntry(identity);
@@ -57,10 +60,12 @@ export async function createRoom(identity, { difficulty = "mixed", isPublic = fa
     status: "waiting",
     public: Boolean(isPublic),
     difficulty,
+    kind,
+    title: KINDS[kind].title,
     hostLevel: me.level,
     qs: [],
     idx: 0,
-    seconds: SECONDS,
+    seconds: KINDS[kind].seconds,
     qStartedAt: 0,
     lastAnswered: {},
     reveals: [],
@@ -82,7 +87,9 @@ export async function joinRoom(identity, code) {
   if (room.status !== "waiting" || room.memberIds.length >= 2) throw new GameError("That room is already full or has started.");
 
   const me = await playerEntry(identity);
-  const qs = await buildQuiz({ difficulty: room.difficulty, count: COUNT });
+  const kind = kindOf(room.kind);
+  const qs = await questionsFor(kind, { difficulty: room.difficulty, seed: kind === "xi" ? dayKey() : null });
+  if (!qs.length) throw new GameError("Couldn't build that game right now. Try another one, or try again in a minute.", 503);
   const startsAt = Date.now() + COUNTDOWN_MS;
   const next = {
     memberIds: [...room.memberIds, identity.uid],
@@ -108,12 +115,13 @@ export async function getRoom(identity, code) {
 
 /* ---------- quick match: pair with someone of a similar level ---------- */
 
-export async function quickMatch(identity, { difficulty = "mixed" } = {}) {
+export async function quickMatch(identity, { difficulty = "mixed", kind = "quiz" } = {}) {
   rateLimit(`quick:${identity.uid}`, 12);
+  kind = kindOf(kind);
   const store = await getStore();
   const me = await playerEntry(identity);
   const waiting = (await store.list("rooms", { where: [["status", "==", "waiting"], ["public", "==", true]], limit: 25 })).filter(
-    (r) => !r.memberIds.includes(identity.uid) && Date.now() - r.createdAt < 90_000,
+    (r) => !r.memberIds.includes(identity.uid) && Date.now() - r.createdAt < 90_000 && kindOf(r.kind) === kind, // only players who picked the same game
   );
   // Closest level first; widen the allowed gap the longer someone has waited.
   const fits = waiting
@@ -122,10 +130,10 @@ export async function quickMatch(identity, { difficulty = "mixed" } = {}) {
     .sort((a, b) => a.gap - b.gap || a.r.createdAt - b.r.createdAt);
   if (fits.length) return joinRoom(identity, fits[0].r.code);
 
-  const room = await createRoom(identity, { difficulty, isPublic: true });
+  const room = await createRoom(identity, { difficulty, isPublic: true, kind });
   // Two people searching at the same moment: the later room joins the earlier one.
   const rivals = (await store.list("rooms", { where: [["status", "==", "waiting"], ["public", "==", true]], limit: 25 })).filter(
-    (r) => r.code !== room.code && !r.memberIds.includes(identity.uid) && r.createdAt <= room.createdAt && Math.abs(r.hostLevel - me.level) <= 3,
+    (r) => r.code !== room.code && !r.memberIds.includes(identity.uid) && kindOf(r.kind) === kind && r.createdAt <= room.createdAt && Math.abs(r.hostLevel - me.level) <= 3,
   );
   if (rivals.length) {
     await store.delete(`rooms/${room.code}`);
@@ -145,9 +153,9 @@ export async function cancelRoom(identity, code) {
 
 /* ---------- playing ---------- */
 
-const pointsFor = (q, elapsed) => {
+const pointsFor = (q, elapsed, seconds) => {
   const base = BASE[q.difficulty] ?? 100;
-  const remaining = Math.max(0, 1 - Math.min(elapsed, SECONDS * 1000) / (SECONDS * 1000));
+  const remaining = Math.max(0, 1 - Math.min(elapsed, seconds * 1000) / (seconds * 1000));
   return base + Math.round(base * 0.5 * remaining);
 };
 
@@ -163,10 +171,10 @@ export async function answerRoom(identity, code, { index, choice }) {
 
   const secret = await store.get(`rooms_secret/${id}`);
   const elapsed = Date.now() - room.qStartedAt;
-  const inTime = elapsed <= SECONDS * 1000 + GRACE_MS;
+  const inTime = elapsed <= room.seconds * 1000 + GRACE_MS;
   const q = room.qs[index];
   const ok = inTime && Number.isInteger(choice) && choice === secret.answers[index];
-  const pick = { choice: Number.isInteger(choice) ? choice : -1, ok, points: ok ? pointsFor(q, elapsed) : 0, ms: elapsed };
+  const pick = { choice: Number.isInteger(choice) ? choice : -1, ok, points: ok ? pointsFor(q, elapsed, room.seconds) : 0, ms: elapsed };
   // Each player writes only their own fields, so two answers at the same moment can't overwrite each other.
   await store.set(`rooms_secret/${id}`, { [`picks.${index}.${identity.uid}`]: pick }, { merge: true });
   await store.update(`rooms/${id}`, { [`lastAnswered.${identity.uid}`]: index });
@@ -184,7 +192,7 @@ export async function tickRoom(identity, code) {
   const room = await store.get(`rooms/${id}`);
   memberOnly(room, identity.uid);
   if (room.status !== "playing") return room;
-  if (Date.now() < room.qStartedAt + SECONDS * 1000 + GRACE_MS) return room;
+  if (Date.now() < room.qStartedAt + room.seconds * 1000 + GRACE_MS) return room;
   const secret = await store.get(`rooms_secret/${id}`);
   return closeQuestion(store, id, secret.answers[room.idx], room.idx);
 }
@@ -258,7 +266,7 @@ export async function rematch(identity, code) {
   memberOnly(room, identity.uid);
   if (room.status !== "done") throw new GameError("Finish the battle first.");
   if (room.rematch) return { code: room.rematch };
-  const next = await createRoom(identity, { difficulty: room.difficulty });
+  const next = await createRoom(identity, { difficulty: room.difficulty, kind: room.kind });
   await store.update(`rooms/${id}`, { rematch: next.code });
   return { code: next.code };
 }

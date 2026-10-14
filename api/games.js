@@ -6,7 +6,7 @@ import { guessAnswer, guessGiveUp, guessReveal, startGuess } from "./_lib/games/
 import { answerRoom, cancelRoom, createRoom, friendsRanking, getRoom, joinRoom, quickMatch, rematch, tickRoom } from "./_lib/games/battle.js";
 import { COMPETITIONS, createLeague, fixtures, joinLeague, leaveLeague, myLeagues, myPredictions, place, settle } from "./_lib/games/predictor.js";
 import { decideQuestion, pendingQuestions, reportQuestion, submitQuestion } from "./_lib/games/questions.js";
-import { usesFirestore } from "./_lib/games/store.js";
+import { getStore, usesFirestore } from "./_lib/games/store.js";
 import { adminStats } from "./_lib/games/adminstats.js";
 import { parseServiceAccount, projectIdFromEnv } from "./_lib/games/admin.js";
 import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
@@ -69,9 +69,9 @@ const ACTIONS = {
   "pred.leaveLeague": (who, b) => leaveLeague(who, b.code),
 
   /* head-to-head battles */
-  "battle.create": (who, b) => createRoom(who, { difficulty: b.difficulty }),
+  "battle.create": (who, b) => createRoom(who, { difficulty: b.difficulty, kind: b.kind }),
   "battle.join": (who, b) => joinRoom(who, b.code),
-  "battle.quick": (who, b) => quickMatch(who, { difficulty: b.difficulty }),
+  "battle.quick": (who, b) => quickMatch(who, { difficulty: b.difficulty, kind: b.kind }),
   "battle.cancel": (who, b) => cancelRoom(who, b.code),
   "battle.room": async (who, b) => ({ room: await getRoom(who, b.code), now: Date.now() }),
   "battle.answer": async (who, b) => ({ room: await answerRoom(who, b.code, { index: b.index, choice: b.choice }), now: Date.now() }),
@@ -96,6 +96,32 @@ const ACTIONS = {
 };
 
 /** Open /api/games in a browser to see whether the server setup is complete (no secrets are shown). */
+// Where the database is and how long one read takes from this server (it is why actions feel slow or fast).
+async function databaseSpeed(projectId) {
+  try {
+    const store = await getStore();
+    await store.get("gp/healthcheck-readonly"); // first call includes connecting
+    const times = [];
+    for (let i = 0; i < 3; i++) {
+      const t = performance.now();
+      await store.get(`gp/healthcheck-readonly-${i}`);
+      times.push(Math.round(performance.now() - t));
+    }
+    let location = null;
+    try {
+      const { adminApp } = await import("./_lib/games/admin.js");
+      const token = await adminApp().options.credential.getAccessToken();
+      const res = await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)`, { headers: { Authorization: `Bearer ${token.access_token}` }, signal: AbortSignal.timeout(4000) });
+      location = (await res.json()).locationId ?? null;
+    } catch {
+      /* location is a nicety */
+    }
+    return { readMs: Math.min(...times), databaseLocation: location, functionRegion: process.env.VERCEL_REGION ?? "local" };
+  } catch (err) {
+    return { error: String(err.message).slice(0, 120) };
+  }
+}
+
 export async function GET() {
   const sa = parseServiceAccount();
   const projectId = projectIdFromEnv();
@@ -112,7 +138,8 @@ export async function GET() {
   else if (!sa.valid) problems.push("FIREBASE_SERVICE_ACCOUNT isn't valid JSON. Paste the whole file again, as one line.");
   if (sa.valid && projectId && sa.projectId !== projectId) problems.push(`The service account is for project "${sa.projectId}" but the website uses "${projectId}". They must be the same Firebase project.`);
   if (!checks.adminEmails) problems.push("Set ADMIN_EMAILS to your sign-in email to review questions.");
-  return Response.json({ ok: problems.length === 0, ...checks, problems }, { headers: { "Cache-Control": "no-store" } });
+  const speed = usesFirestore() && sa.valid ? await databaseSpeed(projectId) : null;
+  return Response.json({ ok: problems.length === 0, ...checks, ...(speed ? { speed } : {}), problems }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request) {
@@ -122,8 +149,10 @@ export async function POST(request) {
     if (!handler) throw new GameError("Unknown action.", 404);
     const who = await identify(request);
     rateLimit(`all:${who.uid}`, 240);
-    if (!NOT_ACTIVITY.has(body.action)) await markSeen(who);
+    // Recording "seen today" runs alongside the real work instead of in front of it.
+    const seen = NOT_ACTIVITY.has(body.action) ? null : markSeen(who).catch(() => {});
     const result = await handler(who, body);
+    await seen;
     return Response.json(result ?? { ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     const status = err instanceof AuthError || err instanceof GameError ? err.status : 500;

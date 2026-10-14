@@ -1,5 +1,6 @@
 import { cached, getJson, isFootball, leagueById, pathOf } from "./sports.js";
 import { getStandings } from "./standings.js";
+import { getTally } from "./tally.js";
 
 /*
  * League, player and team pages for every sport we serve: league leaders (football), a player's
@@ -16,8 +17,8 @@ const statValue = (dv, key) => Number(String(dv).match(new RegExp(`${key}:\\s*(\
 export async function getLeaders(league) {
   check(league);
   if (!isFootball(league)) throw new Error("bad request");
-  return cached(`leaders:${league}`, 30 * 60_000, async () => {
-    const j = await getJson(`https://site.api.espn.com/apis/site/v2/sports/${pathOf(league)}/statistics`);
+  return cached(`leaders:${league}`, 5 * 60_000, async () => {
+    const [j, tally] = await Promise.all([getJson(`https://site.api.espn.com/apis/site/v2/sports/${pathOf(league)}/statistics`), getTally(league)]);
     const list = (name, key) =>
       (j.stats?.find((s) => s.name === name)?.leaders ?? []).slice(0, 50).map((l, i) => ({
         rank: i + 1,
@@ -29,8 +30,21 @@ export async function getLeaders(league) {
         value: l.value ?? statValue(l.displayValue, key),
         matches: statValue(l.displayValue, "Matches"),
       }));
-    const scorers = list("goalsLeaders", "Goals");
-    const assists = list("assistsLeaders", "Assists");
+    let scorers = list("goalsLeaders", "Goals");
+    let assists = list("assistsLeaders", "Assists");
+
+    // ESPN's tables run behind the real matches. When we have counted every match ourselves, use that.
+    if (tally) {
+      const appearances = new Map([...scorers, ...assists].map((r) => [r.id, r.matches]));
+      const top = (field) =>
+        [...tally.players.values()]
+          .filter((p) => p[field] > 0)
+          .sort((a, b) => b[field] - a[field] || b[field === "goals" ? "assists" : "goals"] - a[field === "goals" ? "assists" : "goals"] || a.name.localeCompare(b.name))
+          .slice(0, 50)
+          .map((p, i) => ({ rank: i + 1, id: p.id, name: p.name, team: p.team, teamId: p.teamId, teamLogo: p.teamLogo, value: p[field], matches: appearances.get(p.id) ?? null }));
+      scorers = top("goals");
+      assists = top("assists");
+    }
 
     // Goals + assists per player, from the two lists (a player must appear in at least one).
     const byPlayer = new Map();
@@ -39,6 +53,7 @@ export async function getLeaders(league) {
         const row = byPlayer.get(r.id) ?? { ...r, goals: 0, assists: 0 };
         row[field] = r.value ?? 0;
         row.matches = row.matches ?? r.matches;
+        row.teamLogo = row.teamLogo ?? r.teamLogo;
         byPlayer.set(r.id, row);
       }
     }
@@ -67,6 +82,7 @@ export async function getLeaders(league) {
 
     return {
       value: { league, leagueName: leagueById(league)?.name ?? league, scorers, assists, contributions, attack, defence },
+      ttl: tally?.live ? 20_000 : 60_000,
     };
   });
 }
@@ -74,9 +90,15 @@ export async function getLeaders(league) {
 /** One player's profile and season stats. */
 export async function getPlayer(league, id) {
   check(league, id);
-  return cached(`player:${league}:${id}`, 6 * 3600_000, async () => {
-    const j = await getJson(`https://site.web.api.espn.com/apis/common/v3/sports/${pathOf(league)}/athletes/${id}`);
+  return cached(`player:${league}:${id}`, 60_000, async () => {
+    const [j, tally] = await Promise.all([getJson(`https://site.web.api.espn.com/apis/common/v3/sports/${pathOf(league)}/athletes/${id}`), getTally(league)]);
     const a = j.athlete ?? {};
+    // Goals and assists as counted from the matches (ESPN's own totals can be a day behind).
+    const mine = tally?.players.get(id);
+    const counted = (label, value) => {
+      if (!tally || !/^(Total Goals|Assists)$/.test(label)) return value;
+      return String(label === "Assists" ? mine?.assists ?? 0 : mine?.goals ?? 0);
+    };
     return {
       value: {
         id,
@@ -96,7 +118,7 @@ export async function getPlayer(league, id) {
         height: a.displayHeight ?? null,
         weight: a.displayWeight ?? null,
         photo: a.headshot?.href ?? null,
-        season: (a.statsSummary?.statistics ?? []).map((s) => ({ label: s.displayName, value: s.displayValue })),
+        season: (a.statsSummary?.statistics ?? []).map((s) => ({ label: s.displayName, value: counted(s.displayName, s.displayValue) })),
       },
     };
   });
@@ -137,7 +159,7 @@ const GROUPS = [
 /** A team's recent results, upcoming fixtures and squad. */
 export async function getTeam(league, id) {
   check(league, id);
-  return cached(`team:${league}:${id}`, 30 * 60_000, async () => {
+  return cached(`team:${league}:${id}`, 10 * 60_000, async () => {
     const base = `https://site.api.espn.com/apis/site/v2/sports/${pathOf(league)}/teams/${id}`;
     const [results, fixtures, roster] = await Promise.all([
       getJson(`${base}/schedule`).catch(() => ({})),

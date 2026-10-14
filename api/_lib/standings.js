@@ -17,7 +17,7 @@ const COLUMNS = {
 export async function getStandings(league) {
   const info = leagueById(league);
   if (!info) throw new Error("bad request");
-  return cached(`standings:${league}`, 15 * 60_000, async () => {
+  return cached(`standings:${league}`, 5 * 60_000, async () => {
     const j = await getJson(`https://site.api.espn.com/apis/v2/sports/${info.path}/standings`);
     const children = j.children?.length ? j.children : [j];
     const spec = COLUMNS[info.sport];

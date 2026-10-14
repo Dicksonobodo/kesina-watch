@@ -214,16 +214,7 @@ export function QuizGame({ kind }) {
           <AnimatePresence mode="wait">
             <motion.div key={q.id + q.index} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="mt-5">
               <Card>
-                {q.meta?.kind === "xi" && <LineupPitch xi={q.meta.xi} current={q.meta.slot} filled={filled} />}
-                {q.meta?.kind === "player" && (
-                  <div className="mb-4 flex items-center gap-4">
-                    <PlayerBadge name={q.meta.name} team={q.meta.team} className="size-20 rounded-3xl text-2xl" />
-                    <div>
-                      <p className="font-display text-xl font-bold">{q.meta.name}</p>
-                      <p className="text-sm text-mist-500">{q.meta.team}</p>
-                    </div>
-                  </div>
-                )}
+                <QuestionMeta q={q} filled={filled} />
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-white/[.06] px-2.5 py-1 font-mono text-[10px] tracking-wider text-mist-300 uppercase">{q.category.replace(/-/g, " ")}</span>
                   <span className={cn("rounded-full px-2.5 py-1 font-mono text-[10px] tracking-wider uppercase", q.difficulty === "hard" ? "bg-live/10 text-live" : q.difficulty === "easy" ? "bg-signal/10 text-signal" : "bg-white/[.06] text-mist-300")}>{q.difficulty}</span>
@@ -322,6 +313,22 @@ function Results({ summary, info, kind, onAgain, onBack }) {
       </Card>
     </div>
   );
+}
+
+/** What goes above a question: the line-up (Complete the XI) or the player (shirt numbers). */
+export function QuestionMeta({ q, filled = {} }) {
+  if (q.meta?.kind === "xi") return <LineupPitch xi={q.meta.xi} current={q.meta.slot} filled={filled} />;
+  if (q.meta?.kind === "player")
+    return (
+      <div className="mb-4 flex items-center gap-4">
+        <PlayerBadge name={q.meta.name} team={q.meta.team} className="size-20 rounded-3xl text-2xl" />
+        <div>
+          <p className="font-display text-xl font-bold">{q.meta.name}</p>
+          <p className="text-sm text-mist-500">{q.meta.team}</p>
+        </div>
+      </div>
+    );
+  return null;
 }
 
 /** The line-up with the missing players as "?" (the one being asked about pulses). */

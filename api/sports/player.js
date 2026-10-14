@@ -5,7 +5,7 @@ export async function GET(request) {
   const params = new URL(request.url).searchParams;
   try {
     const player = await getPlayer(params.get("league") || "", params.get("id") || "");
-    return Response.json(player, { headers: { "Cache-Control": "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400" } });
+    return Response.json(player, { headers: { "Cache-Control": "public, max-age=20, s-maxage=30, stale-while-revalidate=60" } });
   } catch (err) {
     return Response.json({ error: err.message === "bad request" ? "Unknown player." : "Player details are unavailable right now." }, { status: err.message === "bad request" ? 400 : 502 });
   }
