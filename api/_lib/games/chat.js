@@ -33,12 +33,17 @@ const synced = new Map(); // uid → signature last written by this server insta
 
 export async function syncDirectory(identity, profile = null) {
   const p = profile ?? (await getProfile(identity));
-  const sig = `${p.name}|${p.avatar}|${p.theme}|${levelFor(p.xp)}`;
+  const email = String(identity.email ?? "").toLowerCase();
+  const sig = `${p.name}|${p.avatar}|${p.theme}|${levelFor(p.xp)}|${email}`;
   if (synced.get(identity.uid) === sig) return;
   synced.set(identity.uid, sig);
   if (synced.size > 5000) synced.clear();
   const store = await getStore();
-  await store.set(`dir/${identity.uid}`, { uid: identity.uid, name: p.name, nameLower: p.name.toLowerCase(), avatar: p.avatar, theme: p.theme, level: levelFor(p.xp), tag: tagOf(identity.uid), updatedAt: Date.now() }, { merge: true });
+  // What people can be found by: the display name (start of it, or its last word) and the email.
+  // The email is only ever used for matching; it is never sent to anyone.
+  const nameLower = p.name.toLowerCase();
+  const lastWord = nameLower.split(/[^\p{L}\p{N}]+/u).filter(Boolean).at(-1) ?? nameLower;
+  await store.set(`dir/${identity.uid}`, { uid: identity.uid, name: p.name, nameLower, lastWord, emailLower: email, avatar: p.avatar, theme: p.theme, level: levelFor(p.xp), tag: tagOf(identity.uid), updatedAt: Date.now() }, { merge: true });
 }
 
 const person = (d) => ({ uid: d.uid, name: d.name, avatar: d.avatar ?? "⚽", theme: d.theme ?? "lime", level: d.level ?? 1, tag: d.tag ?? tagOf(d.uid) });
@@ -47,20 +52,45 @@ async function meta(store, uid) {
   return (await store.get(`chatmeta/${uid}`)) ?? { v: 0, unread: 0, blocked: {} };
 }
 
+/**
+ * Finds people by what you type, matched against their display name (the start of it or any
+ * word's start) and their email (the start of it, or all of it). Results show a name, never an email.
+ */
 export async function searchPeople(identity, q) {
   rateLimit(`chats:${identity.uid}`, 40);
   await syncDirectory(identity);
-  const text = String(q ?? "").trim().toLowerCase().replace(/^@/, "");
-  const [namePart, tagPart] = text.split("#");
-  if (namePart.trim().length < 2 && !/^\d{4}$/.test(tagPart ?? "")) return { people: [] };
+  const raw = String(q ?? "").trim().toLowerCase().replace(/^@/, "");
+  const [termPart, tagPart] = raw.split("#");
+  const term = termPart.trim();
+  const tagOnly = /^\d{4}$/.test(tagPart ?? "");
+  if (term.length < 2 && !tagOnly) return { people: [] };
   const store = await getStore();
-  const needle = namePart.trim();
-  const rows = needle.length >= 2 ? await store.list("dir", { where: [["nameLower", ">=", needle], ["nameLower", "<", `${needle}`]], limit: 30 }) : [];
+  const words = term.split(/\s+/).filter(Boolean);
+  const prefix = (field, text) => store.list("dir", { where: [[field, ">=", text], [field, "<", `${text}\uf8ff`]], limit: 30 });
+
+  const jobs = [];
+  if (term.length >= 2) {
+    jobs.push(prefix("nameLower", term).then((rows) => rows.map((r) => ({ r, via: "name" }))));
+    const last = words.at(-1);
+    if (last.length >= 2) jobs.push(prefix("lastWord", last).then((rows) => rows.map((r) => ({ r, via: "name" }))));
+    if (term.length >= 3 && !term.includes(" ")) jobs.push(prefix("emailLower", term).then((rows) => rows.map((r) => ({ r, via: "email" }))));
+  }
+  const found = new Map();
+  for (const { r, via } of (await Promise.all(jobs)).flat()) if (!found.has(r.uid) || via === "name") found.set(r.uid, { r, via });
+
   const mine = await meta(store, identity.uid);
-  const people = rows
-    .filter((r) => r.uid !== identity.uid && !mine.blocked?.[r.uid] && (!tagPart || (r.tag ?? tagOf(r.uid)) === tagPart))
+  const score = ({ r, via }) => (r.nameLower === term ? 0 : r.nameLower.startsWith(term) ? 1 : via === "name" ? 2 : 3);
+  const people = [...found.values()]
+    .filter(({ r }) => {
+      if (r.uid === identity.uid || mine.blocked?.[r.uid]) return false;
+      if (tagPart && (r.tag ?? tagOf(r.uid)) !== tagPart) return false;
+      // every word typed must appear at the start of a word in the name (or in the email's name part)
+      const hay = `${r.nameLower} ${(r.emailLower ?? "").split("@")[0]}`.split(/[^\p{L}\p{N}]+/u);
+      return words.every((w) => hay.some((h) => h.startsWith(w)) || (r.emailLower ?? "").startsWith(w));
+    })
+    .sort((a, b) => score(a) - score(b) || a.r.name.localeCompare(b.r.name))
     .slice(0, 12)
-    .map(person);
+    .map(({ r, via }) => ({ ...person(r), via }));
   return { people };
 }
 

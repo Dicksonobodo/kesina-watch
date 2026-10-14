@@ -147,7 +147,7 @@ function ChatList() {
       <div className="px-4 pb-2">
         <div className="flex h-10 items-center gap-2.5 rounded-full bg-white/[.06] px-3.5 ring-1 ring-white/[.06] focus-within:ring-signal/50">
           <Search className="size-4 shrink-0 text-mist-500" />
-          <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players by name" aria-label="Search players" className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-mist-700" />
+          <input ref={input} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or email" aria-label="Search players" className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-mist-700" />
           {searching ? <Spinner className="size-4 text-mist-500" /> : q && <button onClick={() => setQ("")} aria-label="Clear" className="text-mist-500"><X className="size-4" /></button>}
         </div>
       </div>
@@ -156,7 +156,7 @@ function ChatList() {
         {people ? (
           <>
             <p className="px-3 pt-1 pb-1.5 font-mono text-[10px] tracking-[.18em] text-mist-500 uppercase">Players</p>
-            {people.length === 0 && <p className="px-3 py-6 text-center text-sm text-mist-500">No players found. Try the first letters of their name, or name#1234.</p>}
+            {people.length === 0 && <p className="px-3 py-6 text-center text-sm text-mist-500">No players found. Try part of their name or email, or name#1234.</p>}
             {people.map((p) => (
               <button key={p.uid} onClick={() => pick(p)} className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:bg-white/[.06]">
                 <Avatar person={p} />
@@ -164,6 +164,7 @@ function ChatList() {
                   <span className="block truncate text-[15px] font-semibold">{p.name}</span>
                   <span className="block font-mono text-[11px] text-mist-500">
                     #{p.tag} · Level {p.level}
+                    {p.via === "email" && " · matched email"}
                   </span>
                 </span>
                 <MessageCircle className="size-4 text-signal" />
