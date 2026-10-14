@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Coins, Flame, Sparkles } from "lucide-react";
+import { Coins, Flame, Gift, Sparkles } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 /* Building blocks shared by every game. */
@@ -74,6 +74,13 @@ export function RewardCard({ reward }) {
         <Stat icon={Flame} value={reward.streak} label={reward.streak === 1 ? "day streak" : "day streak"} />
         <span className="ml-auto font-mono text-[11px] tracking-wider text-mist-500 uppercase">Level {reward.level}</span>
       </div>
+      {reward.chest && (
+        <p className="mt-3 flex items-center gap-2 text-sm">
+          <Gift className="size-4 text-signal" />
+          <span className="font-semibold">{reward.chest.jackpot ? "Jackpot! Your daily chest" : "Your daily chest"}:</span>
+          <span className="text-signal">+{reward.chest.coins} coins · +{reward.chest.xp} XP</span>
+        </p>
+      )}
       {reward.streakBonus > 0 && <p className="mt-3 text-xs text-mist-500">Includes a +{reward.streakBonus} XP daily-streak bonus.</p>}
       {reward.achievements?.length > 0 && (
         <ul className="mt-4 space-y-2">
@@ -120,4 +127,22 @@ export function PlayerChip({ avatar, name, level, className }) {
       </span>
     </span>
   );
+}
+
+/** Shares a result with the phone's share sheet, or copies it so it can be pasted anywhere. Returns what happened. */
+export async function shareResult(text) {
+  try {
+    if (navigator.share) {
+      await navigator.share({ text });
+      return "shared";
+    }
+  } catch (err) {
+    if (err?.name === "AbortError") return "cancelled";
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    return "copied";
+  } catch {
+    return "failed";
+  }
 }

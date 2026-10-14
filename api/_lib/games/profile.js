@@ -49,6 +49,12 @@ export const ACHIEVEMENTS = [
   { id: "rival", icon: "⚔️", name: "Rival", desc: "Win a head-to-head battle", xp: 60, coins: 40, check: (p) => p.stats.battlesWon >= 1 },
   { id: "unbeaten", icon: "🛡️", name: "Unbeaten", desc: "Win 5 head-to-head battles", xp: 120, coins: 90, check: (p) => p.stats.battlesWon >= 5 },
   { id: "scout", icon: "🔎", name: "Scout", desc: "Guess a player in 2 clues or fewer", xp: 80, coins: 50, check: (p) => p.stats.guessFast >= 1 },
+  { id: "streak-snatcher", icon: "⬆️", name: "Calling it", desc: "Reach a streak of 10 in Higher or Lower", xp: 70, coins: 50, check: (p) => p.stats.hiloBest >= 10 },
+  { id: "footle-solved", icon: "🟩", name: "Green all over", desc: "Solve a Footle", xp: 50, coins: 30, check: (p) => p.stats.footleWins >= 1 },
+  { id: "footle-ace", icon: "🎯", name: "Footle ace", desc: "Solve a Footle in 3 tries or fewer", xp: 100, coins: 80, check: (p) => p.stats.footleFast >= 1 },
+  { id: "grid-perfect", icon: "🧩", name: "Immaculate", desc: "Fill every square of the daily club grid", xp: 120, coins: 90, check: (p) => p.stats.gridPerfect >= 1 },
+  { id: "keepy-25", icon: "🤹", name: "Keepy-uppy", desc: "Reach 25 touches in Keepie-Uppie", xp: 60, coins: 40, check: (p) => p.stats.keepyBest >= 25 },
+  { id: "keepy-100", icon: "🪄", name: "Freestyler", desc: "Reach 100 touches in Keepie-Uppie", xp: 200, coins: 150, check: (p) => p.stats.keepyBest >= 100 },
   { id: "contributor", icon: "✍️", name: "Contributor", desc: "Have a question you wrote approved", xp: 70, coins: 50, check: (p) => p.stats.questionsApproved >= 1 },
   { id: "level-5", icon: "⭐", name: "Rising star", desc: "Reach level 5", xp: 50, coins: 40, check: (p) => levelFor(p.xp) >= 5 },
   { id: "level-10", icon: "🌟", name: "Superstar", desc: "Reach level 10", xp: 150, coins: 120, check: (p) => levelFor(p.xp) >= 10 },
@@ -59,6 +65,7 @@ export const ACHIEVEMENTS = [
 const blankStats = () => ({
   games: 0, quizzes: 0, quizCorrect: 0, perfectQuizzes: 0, predictions: 0, predCorrect: 0, predExact: 0, predRun: 0, predRunBest: 0,
   dailyDone: 0, leaguesJoined: 0, battles: 0, battlesWon: 0, guessWins: 0, guessFast: 0, questionsApproved: 0,
+  hiloBest: 0, hiloRuns: 0, keepyBest: 0, keepyRuns: 0, footleWins: 0, footleFast: 0, gridDone: 0, gridPerfect: 0,
 });
 
 const publicName = (name) => String(name || "Player").replace(/[^\p{L}\p{N} ._'-]/gu, "").trim().slice(0, 20) || "Player";
@@ -160,6 +167,7 @@ export async function award(identity, { xp = 0, coins = 0, stats = {}, setStats 
 
   // Daily streak: the first game of a day extends it (or restarts it after a missed day).
   let streakBonus = 0;
+  let chest = null;
   if (game && p.lastDay !== today) {
     p.streak = p.lastDay === yesterdayKey() ? p.streak + 1 : 1;
     p.bestStreak = Math.max(p.bestStreak, p.streak);
@@ -167,6 +175,11 @@ export async function award(identity, { xp = 0, coins = 0, stats = {}, setStats 
     streakBonus = Math.min(p.streak, 10) * 5;
     xp += streakBonus;
     coins += Math.min(p.streak, 10);
+    // The daily chest: a surprise for the first game of each day (a jackpot now and then).
+    const jackpot = Math.random() < 0.12;
+    chest = { coins: (5 + Math.floor(Math.random() * 21)) * (jackpot ? 3 : 1), xp: (10 + Math.floor(Math.random() * 21)) * (jackpot ? 2 : 1), jackpot };
+    xp += chest.xp;
+    coins += chest.coins;
   }
 
   p.xp += xp;
@@ -215,6 +228,7 @@ export async function award(identity, { xp = 0, coins = 0, stats = {}, setStats 
     leveledUp: level > before,
     streak: p.streak,
     streakBonus,
+    chest,
     achievements: unlocked,
     profile: { name: p.name, avatar: p.avatar, theme: p.theme },
   };

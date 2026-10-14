@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { doc, onSnapshot } from "firebase/firestore";
-import { ArrowLeft, Check, Copy, RotateCcw, Share2, Swords, Trophy, Zap } from "lucide-react";
+import { ArrowLeft, Check, Copy, MessageCircle, RotateCcw, Share2, Swords, Trophy, Zap } from "lucide-react";
+import { useChat } from "./chat/ChatProvider";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
@@ -224,6 +225,7 @@ export function BattleRoom() {
   const { code } = useParams();
   const navigate = useNavigate();
   const { store, refresh, profile } = useGames();
+  const chat = useChat();
   const { room, error, apply, skew } = useRoom(code.toUpperCase(), store);
   const now = useNow(skew);
   const [chosen, setChosen] = useState({}); // question index → my choice
@@ -330,6 +332,9 @@ export function BattleRoom() {
                   }}
                 >
                   <Share2 className="size-4" /> Share link
+                </Button>
+                <Button variant="ghost" onClick={() => chat.shareInvite({ code, title: room.title ?? "Football quiz" })}>
+                  <MessageCircle className="size-4" /> Send in chat
                 </Button>
               </div>
             </>

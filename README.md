@@ -71,6 +71,25 @@ Quizzes, predictions and head-to-head battles with XP, levels, daily streaks, co
 - **Daily challenge:** a daily quiz plus a mystery player, the same for everyone, one try each, with a daily board.
 - **Guess the Player:** clues are revealed one at a time by the server (100 points with one clue, down to 10).
 - **Guess the Shirt Number, Who Played for Both?, Name the Trophy, Complete the XI:** the same engine with different question builders.
+- **Higher or Lower:** two players or clubs, one number from this season (goals, assists, points…). One wrong answer ends the run; pairs get closer the longer you last. Best streaks have weekly and all-time boards.
+- **Footle:** guess the footballer in 8 tries. Each guess shows green/yellow/grey for country, position, league, club, age and shirt number (with arrows). A daily player for everyone (saved in `footle_day/<date>`) plus unlimited practice, and a shareable emoji result.
+- **Club Grid:** a daily 3x3 grid; name a player who played for both the row's and the column's club (from `bothclubs.json`). Rarer players score more; 12 guesses; daily board.
+- **Career Path:** a famous player's whole career, club by club with the year he joined (a Wikidata snapshot in `api/_lib/games/careers.json`, about 600 players). Wrong guesses unlock hints: country, position, birth year, then letters.
+- **Keepie-Uppie:** a skill game with no questions (a canvas game in the browser). The server times the run and only accepts scores that were possible in that time.
+- **Daily chest:** the first game each day also opens a chest with random bonus coins and XP (a jackpot now and then).
+
+### Chat (Game Zone only)
+
+A message button (bottom right on every Game Zone page) opens an iMessage-style chat. On a phone it is a bottom sheet over about 60% of the screen, so you can chat while a football game is still visible behind it; on desktop it floats in the corner.
+
+- **Find people** by the start of their name (or `name#1234` using the 4-digit tag shown next to every name). Players appear in the directory when they open the Game Zone.
+- **Messages:** text, "Delivered / Read", a typing indicator, tapbacks (tap a bubble), unsend, block and report. Reports are saved in `chat_reports` (there is no screen for them yet; read them in Firestore).
+- **Battle invites:** the **+** button sends a join code for any head-to-head football game, or use **Send in chat** in a battle's waiting room. The card has a Join button.
+- **Games inside the chat** (full screen, turn-based, work even when the other person is offline; the result lands in the conversation):
+  - **Word Swipe:** a 4x4 board, swipe letters into words for 80 seconds, both players get the same board. Words are checked on the server against the public-domain ENABLE word list (`api/_lib/games/words.txt`).
+  - **Naija Whot:** the 54-card game for two (1 hold on, 2 pick two, 5 pick three, 8 suspension, 14 general market, 20 Whot). Hands and the market stay on the server.
+  - **Darts:** 301, three darts a turn. You aim; the server decides where the dart lands and scores it.
+- Chat polling is cheap: one small request every 20 seconds while the chat is closed (2 seconds with a conversation open). Everything goes through `/api/games` (the free plan's 12-function limit), storage is Firestore: `dir`, `chats`, `chatmsg_<id>`, `inbox_<uid>`, `chatmeta`, `cgames`. No new indexes are needed, and the browser never reads these collections directly (the Firestore rules keep them closed).
 - **Head-to-Head:** two players, the same 10 questions. Invite a friend with a room code or link, or "Quick match" pairs players of a similar level. Rematch button and a rivals record.
 - **Write a question:** players submit questions, an admin approves them (Games → "Review submitted questions"), and the author earns XP, coins and the Contributor badge. Three player reports hide a question until it is reviewed.
 - **Where questions come from:** a hand-checked bank (`api/_lib/games/curated.js`), approved player questions, Open Trivia DB football questions (CC BY-SA, credited in the game), a Wikidata snapshot for "who played for both" (`bothclubs.json`, 16 big clubs), and questions generated from live ESPN data.
@@ -98,6 +117,11 @@ The pictures on the home screen, the game cards and the sign-in page are real ph
 | Game | File | Photo |
 |---|---|---|
 | Match Predictor | `public/games/predictor.webp` | [Alex Simpson](https://unsplash.com/photos/a-soccer-match-in-a-stadium-at-night-DOicNPBVSHs) |
+| Higher or Lower | `public/games/hilo.webp` | [Homer Lopez](https://unsplash.com/photos/man-wearing-black-polo-shirt-holding-led-signage---7zuwOPAFQ) |
+| Footle | `public/games/footle.webp` | [Bertrand Gabioud](https://unsplash.com/photos/grayscale-photo-of-person-wearing-hamsik-17-jersey-WHSXpNZj_8w) |
+| Club Grid | `public/games/grid.webp` | [Victor](https://unsplash.com/photos/empty-football-field-in-aerial-photgraphy-raesgfwU7iM) |
+| Career Path | `public/games/career.webp` | [David Jones](https://unsplash.com/photos/a-person-in-a-yellow-jacket-standing-in-a-tunnel-tyT6J-ifCmQ) |
+| Keepie-Uppie | `public/games/keepy.webp` | [Ruben Leija](https://unsplash.com/photos/man-juggling-ball-on-grass-field-jY_knL-TVvA) |
 | Football IQ Quiz | `public/games/quiz.webp` | [Emily Morter](https://unsplash.com/photos/question-mark-light-in-graffiti-tunnel-8xAA0f9yQnE) |
 | Head-to-Head | `public/games/battle.webp` | [Tobias Flyckt](https://unsplash.com/photos/woman-in-black-and-white-soccer-jersey-kicking-soccer-ball-on-green-field-during-daytime-5yNJx9NO3Yc) |
 | Guess the Player | `public/games/guess.webp` | [Keyur Tandel](https://unsplash.com/photos/a-man-playing-soccer-on-the-beach-at-sunset-NBgX8uetgWs) |

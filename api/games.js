@@ -3,6 +3,12 @@ import { buy, equip, getProfile, markSeen, peekProfile, setName, viewProfile } f
 import { boardNames, getBoard } from "./_lib/games/leaderboard.js";
 import { answerQuestion, currentQuestion, dailyStatus, KINDS, startSession } from "./_lib/games/sessions.js";
 import { guessAnswer, guessGiveUp, guessReveal, startGuess } from "./_lib/games/guess.js";
+import { answerHilo, startHilo } from "./_lib/games/hilo.js";
+import { footlePlayers, giveUpFootle, guessFootle, startFootle } from "./_lib/games/footle.js";
+import { careerNames, getGrid, guessGrid } from "./_lib/games/clubgames.js";
+import { blockPerson, openChat, reactTo, reportPerson, searchPeople, sendMessage, syncChat, syncDirectory, unsendMessage } from "./_lib/games/chat.js";
+import { createGame, getGame, moveGame, rematch as rematchGame } from "./_lib/games/cgames.js";
+import { finishKeepy, startKeepy } from "./_lib/games/keepy.js";
 import { answerRoom, cancelRoom, createRoom, friendsRanking, getRoom, joinRoom, quickMatch, rematch, tickRoom } from "./_lib/games/battle.js";
 import { COMPETITIONS, createLeague, fixtures, joinLeague, leaveLeague, myLeagues, myPredictions, place, settle } from "./_lib/games/predictor.js";
 import { decideQuestion, pendingQuestions, reportQuestion, submitQuestion } from "./_lib/games/questions.js";
@@ -18,7 +24,7 @@ import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
  */
 
 // Calls that don't count as "playing today" for the admin numbers.
-const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending"]);
+const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending", "career.names", "footle.players", "grid.get", "chat.sync", "chat.search", "chat.open", "cg.get"]);
 
 const ACTIONS = {
   /* who am I (no database access: used by the sidebar to show the Admin link) */
@@ -34,11 +40,20 @@ const ACTIONS = {
   /* profile */
   "profile.get": async (who) => {
     const [profile, daily] = await Promise.all([getProfile(who), dailyStatus(who)]);
+    syncDirectory(who, profile).catch(() => {}); // lets friends find this player in chat
     return { profile: viewProfile(profile, who), daily, kinds: KINDS, store: usesFirestore() ? "firestore" : "memory", boards: boardNames, weekEndsInMs: msToWeekEnd() };
   },
-  "profile.setName": async (who, b) => ({ profile: viewProfile(await setName(who, b.name), who) }),
+  "profile.setName": async (who, b) => {
+    const p = await setName(who, b.name);
+    syncDirectory(who, p).catch(() => {});
+    return { profile: viewProfile(p, who) };
+  },
   "profile.buy": async (who, b) => ({ profile: viewProfile(await buy(who, b.kind, b.id), who) }),
-  "profile.equip": async (who, b) => ({ profile: viewProfile(await equip(who, b.kind, b.id), who) }),
+  "profile.equip": async (who, b) => {
+    const p = await equip(who, b.kind, b.id);
+    syncDirectory(who, p).catch(() => {});
+    return { profile: viewProfile(p, who) };
+  },
 
   /* boards */
   "lb.get": async (who, b) => getBoard(b.board, who.uid),
@@ -51,7 +66,42 @@ const ACTIONS = {
   "daily.status": (who) => dailyStatus(who),
 
   /* guess the player */
-  "guess.start": (who, b) => startGuess(who, { daily: Boolean(b.daily) }),
+  "guess.start": (who, b) => startGuess(who, { daily: Boolean(b.daily), mode: b.mode }),
+  "career.names": async () => ({ names: careerNames() }),
+
+  /* higher or lower */
+  "hilo.start": (who) => startHilo(who),
+  "hilo.answer": (who, b) => answerHilo(who, String(b.session ?? ""), b.choice),
+
+  /* footle: guess the footballer from how close each guess is */
+  "footle.players": async () => ({ players: await footlePlayers() }),
+  "footle.start": (who, b) => startFootle(who, { daily: Boolean(b.daily) }),
+  "footle.guess": (who, b) => guessFootle(who, String(b.session ?? ""), b.player),
+  "footle.giveup": (who, b) => giveUpFootle(who, String(b.session ?? "")),
+
+  /* daily club grid */
+  "grid.get": (who) => getGrid(who),
+  "grid.guess": (who, b) => guessGrid(who, String(b.cell ?? ""), b.name),
+
+  /* chat */
+  "chat.search": (who, b) => searchPeople(who, b.q),
+  "chat.open": (who, b) => openChat(who, String(b.peer ?? "")),
+  "chat.sync": (who, b) => syncChat(who, { v: Number(b.v ?? -1), chat: b.chat ? String(b.chat) : null, since: Number(b.since ?? 0), typing: Boolean(b.typing) }),
+  "chat.send": (who, b) => sendMessage(who, b),
+  "chat.react": (who, b) => reactTo(who, String(b.chat ?? ""), String(b.msg ?? ""), b.emoji),
+  "chat.unsend": (who, b) => unsendMessage(who, String(b.chat ?? ""), String(b.msg ?? "")),
+  "chat.block": (who, b) => blockPerson(who, String(b.uid ?? ""), Boolean(b.blocked)),
+  "chat.report": (who, b) => reportPerson(who, String(b.chat ?? ""), b.reason),
+
+  /* games played inside a chat */
+  "cg.create": (who, b) => createGame(who, { peer: String(b.peer ?? ""), type: String(b.type ?? "") }),
+  "cg.get": (who, b) => getGame(who, String(b.id ?? ""), Number(b.v ?? -1)),
+  "cg.move": (who, b) => moveGame(who, String(b.id ?? ""), b),
+  "cg.rematch": (who, b) => rematchGame(who, String(b.id ?? "")),
+
+  /* keepie-uppie */
+  "keepy.start": (who) => startKeepy(who),
+  "keepy.finish": (who, b) => finishKeepy(who, String(b.session ?? ""), b.score),
   "guess.answer": (who, b) => guessAnswer(who, b.session, b.name),
   "guess.reveal": (who, b) => guessReveal(who, b.session),
   "guess.giveup": (who, b) => guessGiveUp(who, b.session),

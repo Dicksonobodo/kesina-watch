@@ -23,6 +23,10 @@ const GamesLayout = page(() => import("@/features/games/GamesProvider"), "GamesL
 const GamesHub = page(() => import("@/features/games/GamesHub"), "GamesHub");
 const QuizGame = page(() => import("@/features/games/QuizGame"), "QuizGame");
 const GuessPlayer = page(() => import("@/features/games/GuessPlayer"), "GuessPlayer");
+const HigherLower = page(() => import("@/features/games/HigherLower"), "HigherLower");
+const Footle = page(() => import("@/features/games/Footle"), "Footle");
+const ClubGrid = page(() => import("@/features/games/ClubGrid"), "ClubGrid");
+const Keepy = page(() => import("@/features/games/Keepy"), "Keepy");
 const Predictor = page(() => import("@/features/games/Predictor"), "Predictor");
 const BattleLobby = page(() => import("@/features/games/Battle"), "BattleLobby");
 const BattleRoom = page(() => import("@/features/games/Battle"), "BattleRoom");
@@ -58,6 +62,11 @@ export default function App() {
                           <Route path="trophy" element={<QuizGame key="trophy" kind="trophy" />} />
                           <Route path="xi" element={<QuizGame key="xi" kind="xi" />} />
                           <Route path="guess" element={<GuessPlayer key="guess" />} />
+                          <Route path="career" element={<GuessPlayer key="career" mode="career" />} />
+                          <Route path="hilo" element={<HigherLower />} />
+                          <Route path="footle" element={<Footle />} />
+                          <Route path="grid" element={<ClubGrid />} />
+                          <Route path="keepy" element={<Keepy />} />
                           <Route path="predictor" element={<Predictor />} />
                           <Route path="battle" element={<BattleLobby />} />
                           <Route path="battle/:code" element={<BattleRoom />} />

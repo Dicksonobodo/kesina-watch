@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { PlayerBadge } from "@/features/sports/Sheets";
 import { useGames } from "./GamesProvider";
 import { GameArt } from "./art";
+import { plain } from "./NamePicker";
 import { Card, ErrorNote, Eyebrow, RewardCard } from "./ui";
 
 /*
@@ -16,7 +17,24 @@ import { Card, ErrorNote, Eyebrow, RewardCard } from "./ui";
  * reaches the browser early). The fewer clues you need, the more points you get.
  */
 
-export function GuessPlayer({ daily = false }) {
+const MODES = {
+  players: {
+    art: "guess",
+    title: (daily) => (daily ? "Mystery player of the day" : "Guess the player"),
+    intro: "A current star from the big five leagues. You start with one clue; every wrong guess reveals another. Win 100 points with one clue, down to 10 with the last.",
+    again: "Another player",
+  },
+  career: {
+    art: "career",
+    title: () => "Career path",
+    intro: "Here is a footballer's whole career, club by club with the year he joined. Who is he? Every wrong guess gives you a hint (his country, position, birth year, then letters). Win 100 points with the path alone, down to 10 with the last hint.",
+    again: "Another career",
+  },
+};
+
+export function GuessPlayer({ daily = false, mode = "players" }) {
+  const copy = MODES[mode];
+  const [names, setNames] = useState(null); // career mode suggests from our own list
   const { rewarded, daily: dailyState, refresh } = useGames();
   const [phase, setPhase] = useState("intro"); // intro | loading | playing | done
   const [round, setRound] = useState(null); // { session, total, points, clues }
@@ -28,9 +46,19 @@ export function GuessPlayer({ daily = false }) {
   const [error, setError] = useState("");
   const input = useRef(null);
 
+  useEffect(() => {
+    if (mode === "career") gamesApi("career.names").then((d) => setNames(d.names)).catch(() => {});
+  }, [mode]);
+
   // Name suggestions from the search feed (any football player; the answer isn't leaked by it).
   useEffect(() => {
     const q = text.trim();
+    if (mode === "career") {
+      const words = plain(q).split(" ").filter(Boolean);
+      if (plain(q).length < 2 || phase !== "playing" || !names) return setSuggest([]);
+      const hits = names.filter((n) => words.every((w) => plain(n).includes(w))).slice(0, 5);
+      return setSuggest(hits.map((name) => ({ id: name, league: "c", name, subtitle: "" })));
+    }
     if (q.length < 3 || phase !== "playing") return setSuggest([]);
     const controller = new AbortController();
     const t = setTimeout(() => {
@@ -43,13 +71,13 @@ export function GuessPlayer({ daily = false }) {
       clearTimeout(t);
       controller.abort();
     };
-  }, [text, phase]);
+  }, [text, phase, mode, names]);
 
   async function start() {
     setError("");
     setPhase("loading");
     try {
-      const r = await gamesApi("guess.start", { daily });
+      const r = await gamesApi("guess.start", { daily, mode });
       setRound({ session: r.session, total: r.total, points: r.points, clues: r.clues });
       setResult(null);
       setText("");
@@ -124,10 +152,10 @@ export function GuessPlayer({ daily = false }) {
 
       {(phase === "intro" || phase === "loading") && (
         <Card className="overflow-hidden text-center">
-          <GameArt id="guess" fit="meet" className="-mx-5 -mt-5 mb-6 h-56 sm:-mx-6 sm:-mt-6" />
-          <h1 className="font-display text-3xl font-extrabold tracking-tight">{daily ? "Mystery player of the day" : "Guess the player"}</h1>
+          <GameArt id={copy.art} fit="meet" className="-mx-5 -mt-5 mb-6 h-56 sm:-mx-6 sm:-mt-6" />
+          <h1 className="font-display text-3xl font-extrabold tracking-tight">{copy.title(daily)}</h1>
           <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-mist-500">
-            A current star from the big five leagues. You start with one clue; every wrong guess reveals another. Win 100 points with one clue, down to 10 with the last.
+            {copy.intro}
             {daily && " Same player for everyone today, one try."}
           </p>
           <div className="mt-7">
@@ -160,7 +188,18 @@ export function GuessPlayer({ daily = false }) {
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-signal/15 font-mono text-xs font-bold text-signal">{i + 1}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-mono text-[10px] tracking-[.18em] text-mist-500 uppercase">{c.label}</span>
-                  {c.photo ? (
+                  {c.path ? (
+                    <ol className="mt-3 space-y-0">
+                      {c.path.map((s, k) => (
+                        <li key={k} className="relative flex items-center gap-3 pb-3 last:pb-0">
+                          {k < c.path.length - 1 && <span className="absolute top-5 left-[7px] h-full w-px bg-signal/30" />}
+                          <span className="relative size-[15px] shrink-0 rounded-full bg-signal ring-4 ring-signal/20" />
+                          <span className="min-w-0 flex-1 truncate text-[16px] font-semibold">{s.c}</span>
+                          <span className="font-mono text-xs text-mist-500">{s.y}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : c.photo ? (
                     <img src={c.photo} alt="The mystery player" referrerPolicy="no-referrer" className="mt-2 h-40 rounded-2xl bg-white/[.04] object-contain" />
                   ) : (
                     <span className="mt-0.5 block text-[17px] font-semibold">{c.text}</span>
@@ -229,7 +268,7 @@ export function GuessPlayer({ daily = false }) {
             </div>
             <p className={cn("mt-4 font-display text-3xl font-extrabold tracking-tight", result.correct ? "text-signal" : "")}>{result.answer.name}</p>
             <p className="text-sm text-mist-500">
-              {result.answer.team} · {result.answer.nationality} · {result.answer.position}
+              {[result.answer.team, result.answer.nationality, result.answer.position].filter(Boolean).join(" · ")}
             </p>
             <p className="mt-5 font-display text-5xl font-extrabold text-signal tabular-nums">+{result.points}</p>
             <p className="text-xs text-mist-500">
@@ -238,7 +277,7 @@ export function GuessPlayer({ daily = false }) {
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               {!daily && (
                 <Button onClick={() => setPhase("intro")}>
-                  <RotateCcw className="size-4" /> Another player
+                  <RotateCcw className="size-4" /> {copy.again}
                 </Button>
               )}
               <Link to={daily ? "/games/daily" : "/games"}>

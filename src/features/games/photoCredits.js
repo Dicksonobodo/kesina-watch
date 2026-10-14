@@ -1,5 +1,10 @@
 // Photographers behind the pictures in public/games/ and public/home/ (Unsplash License: free to use, credit is optional but kind).
 export const PHOTO_CREDITS = {
+  hilo: { photographer: "Homer Lopez", profile: "https://unsplash.com/@homerlopez", page: "https://unsplash.com/photos/man-wearing-black-polo-shirt-holding-led-signage---7zuwOPAFQ" },
+  footle: { photographer: "Bertrand Gabioud", profile: "https://unsplash.com/@bergab", page: "https://unsplash.com/photos/grayscale-photo-of-person-wearing-hamsik-17-jersey-WHSXpNZj_8w" },
+  grid: { photographer: "Victor", profile: "https://unsplash.com/@victor_g", page: "https://unsplash.com/photos/empty-football-field-in-aerial-photgraphy-raesgfwU7iM" },
+  career: { photographer: "David Jones", profile: "https://unsplash.com/@davidjones", page: "https://unsplash.com/photos/a-person-in-a-yellow-jacket-standing-in-a-tunnel-tyT6J-ifCmQ" },
+  keepy: { photographer: "Ruben Leija", profile: "https://unsplash.com/@rleija_", page: "https://unsplash.com/photos/man-juggling-ball-on-grass-field-jY_knL-TVvA" },
   predictor: { photographer: "Alex Simpson", profile: "https://unsplash.com/@m_simpsan", page: "https://unsplash.com/photos/a-soccer-match-in-a-stadium-at-night-DOicNPBVSHs" },
   quiz: { photographer: "Emily Morter", profile: "https://unsplash.com/@emilymorter", page: "https://unsplash.com/photos/question-mark-light-in-graffiti-tunnel-8xAA0f9yQnE" },
   battle: { photographer: "Tobias Flyckt", profile: "https://unsplash.com/@flyckt", page: "https://unsplash.com/photos/woman-in-black-and-white-soccer-jersey-kicking-soccer-ball-on-green-field-during-daytime-5yNJx9NO3Yc" },

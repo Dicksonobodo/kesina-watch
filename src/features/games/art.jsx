@@ -238,6 +238,101 @@ const ARTS = {
       </>
     ),
   },
+  hilo: {
+    bg: "from-sky-900 via-blue-950 to-ink-950",
+    svg: (
+      <>
+        <rect x="26" y="26" width="104" height="108" rx="16" fill="#fff" fillOpacity=".1" stroke="#fff" strokeOpacity=".25" />
+        <text x="78" y="92" textAnchor="middle" fontSize="44" fontWeight="900" fill="#fff" fontFamily="system-ui, sans-serif">
+          18
+        </text>
+        <text x="78" y="116" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff" fillOpacity=".6" fontFamily="ui-monospace, monospace">
+          GOALS
+        </text>
+        <rect x="190" y="26" width="104" height="108" rx="16" fill={SIGNAL} fillOpacity=".16" stroke={SIGNAL} strokeOpacity=".7" />
+        <text x="242" y="94" textAnchor="middle" fontSize="52" fontWeight="900" fill={SIGNAL} fontFamily="system-ui, sans-serif">
+          ?
+        </text>
+        <path d="M160 44 l16 20 h-10 v16 h-12 v-16 h-10 z" fill="#3ddc84" />
+        <path d="M160 116 l-16 -20 h10 v-16 h12 v16 h10 z" fill="#ff5d5d" />
+      </>
+    ),
+  },
+
+  footle: {
+    bg: "from-emerald-900 via-teal-950 to-ink-950",
+    svg: (
+      <>
+        {[
+          ["#3a3a46", "#e8b931", "#3a3a46", "#3a3a46", "#e8b931", "#3a3a46"],
+          ["#2fbf71", "#3a3a46", "#e8b931", "#3a3a46", "#3a3a46", "#e8b931"],
+          ["#2fbf71", "#2fbf71", "#3a3a46", "#2fbf71", "#e8b931", "#3a3a46"],
+          ["#2fbf71", "#2fbf71", "#2fbf71", "#2fbf71", "#2fbf71", "#2fbf71"],
+        ].map((row, y) =>
+          row.map((c, x) => <rect key={`${y}${x}`} x={44 + x * 40} y={18 + y * 34} width="34" height="28" rx="7" fill={c} />),
+        )}
+      </>
+    ),
+  },
+
+  career: {
+    bg: "from-violet-900 via-purple-950 to-ink-950",
+    svg: (
+      <>
+        <path d="M30 118 C70 40 120 150 160 80 S250 30 292 52" fill="none" stroke={SIGNAL} strokeWidth="4" strokeDasharray="2 9" strokeLinecap="round" />
+        {[[30, 118, "1"], [106, 96, "2"], [186, 68, "3"], [262, 40, "?"]].map(([x, y, t], i) => (
+          <g key={t}>
+            <circle cx={x} cy={y} r="19" fill={i === 3 ? SIGNAL : "#0a0a0f"} stroke={SIGNAL} strokeWidth="3" />
+            <text x={x} y={y + 6} textAnchor="middle" fontSize="17" fontWeight="900" fill={i === 3 ? "#0a0a0f" : "#fff"} fontFamily="system-ui, sans-serif">
+              {t}
+            </text>
+          </g>
+        ))}
+      </>
+    ),
+  },
+
+  grid: {
+    bg: "from-rose-900 via-pink-950 to-ink-950",
+    svg: (
+      <>
+        {[0, 1, 2].map((r) =>
+          [0, 1, 2].map((c) => {
+            const filled = (r + c) % 3 !== 1;
+            return (
+              <g key={`${r}${c}`}>
+                <rect x={104 + c * 48} y={30 + r * 40} width="42" height="34" rx="8" fill={filled ? SIGNAL : "#fff"} fillOpacity={filled ? 0.9 : 0.1} stroke="#fff" strokeOpacity={filled ? 0 : 0.25} />
+                {filled && <path d={`M${116 + c * 48} ${48 + r * 40} l7 7 14 -14`} fill="none" stroke="#0a0a0f" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />}
+              </g>
+            );
+          }),
+        )}
+        {[0, 1, 2].map((i) => (
+          <g key={i}>
+            <circle cx={84} cy={47 + i * 40} r="11" fill="#fff" fillOpacity=".85" />
+            <circle cx={125 + i * 48} cy={18} r="8" fill="#fff" fillOpacity=".85" />
+          </g>
+        ))}
+      </>
+    ),
+  },
+
+  keepy: {
+    bg: "from-orange-900 via-red-950 to-ink-950",
+    svg: (
+      <>
+        <path d="M60 140 Q160 -30 260 140" fill="none" stroke="#fff" strokeOpacity=".22" strokeWidth="3" strokeDasharray="3 8" strokeLinecap="round" />
+        <circle cx="160" cy="46" r="28" fill="#fff" />
+        <path d="M160 30 l13 9 -5 15 h-16 l-5 -15 z" fill="#0a0a0f" />
+        <path d="M147 39 l-14 -4 M173 39 l14 -4 M142 54 l-8 12 M178 54 l8 12 M160 58 v14" stroke="#0a0a0f" strokeWidth="2.5" strokeLinecap="round" />
+        <ellipse cx="160" cy="146" rx="46" ry="6" fill="#000" fillOpacity=".35" />
+        <path d="M120 128 q18 -22 52 -6 q16 8 28 -2 l8 16 H120 z" fill={SIGNAL} />
+        <text x="262" y="40" textAnchor="middle" fontSize="30" fontWeight="900" fill={SIGNAL} fontFamily="system-ui, sans-serif">
+          +1
+        </text>
+      </>
+    ),
+  },
 };
 
 /** fit only matters for the drawn fallback: "slice" fills the box, "meet" shows all of it centred. */

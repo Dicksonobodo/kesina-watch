@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowLeft, Brain, CalendarCheck, Check, Coins, Crown, Flame, Lock, Medal, PenLine, ShieldCheck, UserSearch, X } from "lucide-react";
+import { ArrowLeft, Brain, CalendarCheck, Check, Coins, Crown, Flame, Grid3x3, Lock, Medal, PenLine, ShieldCheck, Spline, UserSearch, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi, THEME_COLORS } from "@/lib/games";
@@ -27,6 +27,8 @@ export function DailyChallenge() {
   const tasks = [
     { to: "/games/daily-quiz", icon: Brain, title: "Daily quiz", desc: "10 questions, the same for everyone today.", done: daily?.quizDone, score: daily?.quizScore },
     { to: "/games/daily-player", icon: UserSearch, title: "Mystery player", desc: "One player, six clues, one try.", done: daily?.guessDone, score: daily?.guessScore },
+    { to: "/games/footle", icon: Spline, title: "Footle", desc: "Find the footballer in 8 tries.", done: daily?.footleDone, score: daily?.footleScore },
+    { to: "/games/grid", icon: Grid3x3, title: "Club grid", desc: "Nine squares, two clubs each.", done: daily?.gridDone, score: daily?.gridScore },
   ];
   const finished = tasks.filter((t) => t.done).length;
 
@@ -36,16 +38,16 @@ export function DailyChallenge() {
       <GameArt id="daily" fit="meet" className="mb-5 h-32 rounded-3xl ring-1 ring-white/10" />
       <div>
         <h1 className="font-display text-3xl font-extrabold tracking-tight">Daily challenge</h1>
-        <p className="text-sm text-mist-500">New every day (UTC). Finish both to keep your streak glowing.</p>
+        <p className="text-sm text-mist-500">New every day (UTC). Play any one to keep your streak, or finish all four.</p>
       </div>
 
       <Card className="mt-6">
         <div className="flex items-center justify-between">
           <Eyebrow>Today</Eyebrow>
-          <span className="font-mono text-xs text-mist-300">{finished} / 2 done</span>
+          <span className="font-mono text-xs text-mist-300">{finished} / {tasks.length} done</span>
         </div>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[.07]">
-          <motion.div className="h-full rounded-full bg-signal" animate={{ width: `${(finished / 2) * 100}%` }} />
+          <motion.div className="h-full rounded-full bg-signal" animate={{ width: `${(finished / tasks.length) * 100}%` }} />
         </div>
         {profile && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -79,6 +81,11 @@ const BOARDS = [
   ["weekly", "This week"],
   ["all", "All time"],
   ["daily", "Daily"],
+  ["grid", "Club grid"],
+  ["hiloWeekly", "Higher/Lower (week)"],
+  ["hiloAll", "Higher/Lower (all)"],
+  ["keepyWeekly", "Keepie-Uppie (week)"],
+  ["keepyAll", "Keepie-Uppie (all)"],
   ["predWeekly", "Predictions (week)"],
   ["predAll", "Predictions (all)"],
 ];

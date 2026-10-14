@@ -179,5 +179,15 @@ export async function dailyStatus(identity) {
   const store = await getStore();
   const today = dayKey();
   const row = await store.get(`daily_${today}/${identity.uid}`);
-  return { day: today, quizDone: row?.quiz != null, quizScore: row?.quiz ?? null, guessDone: row?.guess != null, guessScore: row?.guess ?? null };
+  return {
+    day: today,
+    quizDone: row?.quiz != null,
+    quizScore: row?.quiz ?? null,
+    guessDone: row?.guess != null,
+    guessScore: row?.guess ?? null,
+    footleDone: row?.footle != null,
+    footleScore: row?.footle ?? null,
+    gridDone: row?.grid != null,
+    gridScore: row?.grid ?? null,
+  };
 }

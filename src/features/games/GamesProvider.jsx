@@ -4,6 +4,9 @@ import { Coins, Flame, Sparkles, Trophy } from "lucide-react";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { gamesApi, THEME_COLORS } from "@/lib/games";
+import { ChatProvider } from "./chat/ChatProvider";
+import { ChatLauncher, ChatPanel } from "./chat/ChatPanel";
+import { GameHost } from "./chat/GameHost";
 
 /*
  * The player's game profile (XP, level, coins, streak) for every games page, plus a small
@@ -57,7 +60,12 @@ export function GamesLayout() {
   return (
     <GamesContext.Provider value={value}>
       <div style={{ "--color-signal": accent }}>
-        <Outlet />
+        <ChatProvider>
+          <Outlet />
+          <ChatLauncher />
+          <ChatPanel />
+          <GameHost />
+        </ChatProvider>
       </div>
       <Toasts items={toasts} />
     </GamesContext.Provider>

@@ -86,7 +86,7 @@ const hits = new Map();
 export function rateLimit(key, max, windowMs = 60_000) {
   const now = Date.now();
   const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (recent.length >= max) throw new GameError("You're going a bit fast. Slow down a little.", 429);
+  if (recent.length >= max * (Number(process.env.RATE_LIMIT_SCALE) || 1)) throw new GameError("You're going a bit fast. Slow down a little.", 429);
   recent.push(now);
   hits.set(key, recent);
   if (hits.size > 5000) hits.clear();

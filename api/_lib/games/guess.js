@@ -2,6 +2,7 @@ import { getPlayer } from "../football.js";
 import { getPhoto } from "../photos.js";
 import { leagueById } from "../sports.js";
 import { playerPool } from "./content.js";
+import { careerClues } from "./clubgames.js";
 import { getStore } from "./store.js";
 import { award, getProfile } from "./profile.js";
 import { addBoardPoints } from "./leaderboard.js";
@@ -31,17 +32,18 @@ async function clueSet(entry) {
   return { name: d.name, team: d.team, nationality: d.nationality, position: d.position, photo: photo ?? null, clues };
 }
 
-export async function startGuess(identity, { daily = false } = {}) {
+export async function startGuess(identity, { daily = false, mode = "players" } = {}) {
+  const career = mode === "career" && !daily;
   const store = await getStore();
   const today = dayKey();
   if (daily) {
     const row = await store.get(`daily_${today}/${identity.uid}`);
     if (row?.guess != null) throw new GameError("You've already played today's player. Come back tomorrow!");
   }
-  const pool = await playerPool();
+  const pool = career ? [] : await playerPool();
   const rng = daily ? rngFrom(`guess-${today}`) : Math.random;
-  let chosen = null;
-  for (const entry of sample(pool, 6, rng)) {
+  let chosen = career ? careerClues() : null;
+  for (const entry of career ? [] : sample(pool, 6, rng)) {
     chosen = await clueSet(entry).catch(() => null);
     if (chosen && chosen.clues.length >= 5) break;
     chosen = null;
@@ -52,6 +54,7 @@ export async function startGuess(identity, { daily = false } = {}) {
   await store.set(`sessions/${id}`, {
     uid: identity.uid,
     kind: "guess",
+    mode: career ? "career" : "players",
     daily,
     day: today,
     answer: { name: chosen.name, team: chosen.team, nationality: chosen.nationality, position: chosen.position, photo: chosen.photo },

@@ -9,8 +9,13 @@ import { dayKey, GameError, memo, msToWeekEnd, weekKey } from "./util.js";
 const BOARDS = {
   weekly: { collection: () => `lb_weekly_${weekKey()}`, field: "xp", title: "This week", unit: "XP", resets: true },
   all: { collection: () => "lb_all", field: "xp", title: "All time", unit: "XP" },
-  daily: { collection: () => `lb_daily_${dayKey()}`, field: "score", title: "Today's daily quiz", unit: "pts" },
+  daily: { collection: () => `lb_daily_${dayKey()}`, field: "score", title: "Today's daily challenges", unit: "pts" },
   predWeekly: { collection: () => `lb_pred_${weekKey()}`, field: "pts", title: "Predictions this week", unit: "pts", resets: true },
+  hiloWeekly: { collection: () => `lb_hilo_${weekKey()}`, field: "best", title: "Higher or Lower (week)", unit: "streak", resets: true },
+  hiloAll: { collection: () => "lb_hilo_all", field: "best", title: "Higher or Lower (all time)", unit: "streak" },
+  keepyWeekly: { collection: () => `lb_keepy_${weekKey()}`, field: "best", title: "Keepie-Uppie (week)", unit: "touches", resets: true },
+  keepyAll: { collection: () => "lb_keepy_all", field: "best", title: "Keepie-Uppie (all time)", unit: "touches" },
+  grid: { collection: () => `lb_grid_${dayKey()}`, field: "score", title: "Today's club grid", unit: "pts" },
   predAll: { collection: () => "lb_pred_all", field: "pts", title: "Predictions all time", unit: "pts" },
 };
 
