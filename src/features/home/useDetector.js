@@ -51,15 +51,17 @@ export function useDetector() {
     [url, record],
   );
 
+  // A link into the page (?u=…). Watched by value, so it also works when you're already on the
+  // page (a pinned live tapped on Live, say) and not only when the page first opens.
+  const shared = searchParams.get("u");
   useEffect(() => {
-    const shared = searchParams.get("u");
     if (!shared) return;
     setUrl(shared);
     if (searchParams.get("play")) setAutoplay({ at: Number(searchParams.get("t")) || 0 });
     setSearchParams({}, { replace: true });
     detect(null, shared);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [shared]);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "motion/react";
 import { ArrowRight, Megaphone, Music2, Plus, Radio, Trash2, Trophy, X } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -33,6 +33,13 @@ export function LivePage() {
   const channels = sites.filter((s) => s.kind === "live");
   const [adding, setAdding] = useState(false);
   const compact = status === "detecting" || status === "done";
+
+  // A pinned live: find its stream straight away and bring the player into view.
+  const watch = (link) => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    detector.setUrl(link);
+    detector.detect(null, link);
+  };
 
   return (
     <div>
@@ -76,7 +83,7 @@ export function LivePage() {
         )}
       </div>
 
-      <FeaturedLives />
+      <FeaturedLives onWatch={watch} />
 
       {/* Pinned live channels */}
       <section className="mt-12">
@@ -145,9 +152,8 @@ export function LivePage() {
 const LABELS = ["Match", "Concert", "Show", "Event"];
 const TONES = { match: "from-emerald-600 to-emerald-950", concert: "from-fuchsia-600 to-violet-950", show: "from-sky-600 to-blue-950", event: "from-amber-500 to-orange-950" };
 
-function FeaturedLives() {
+function FeaturedLives({ onWatch }) {
   const { admin } = useAccount();
-  const navigate = useNavigate();
   const [items, setItems] = useState(null);
   const [adding, setAdding] = useState(false);
   const [confirm, setConfirm] = useState(null);
@@ -192,7 +198,7 @@ function FeaturedLives() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {items.map((f) => (
             <div key={f.id} className="group relative aspect-[4/3] overflow-hidden rounded-3xl ring-1 ring-white/10">
-              <button onClick={() => navigate(`/live?u=${encodeURIComponent(f.url)}`)} className="absolute inset-0 text-left" aria-label={`Watch ${f.title}`}>
+              <button onClick={() => onWatch(f.url)} className="absolute inset-0 text-left" aria-label={`Watch ${f.title}`}>
                 <span className={cn("absolute inset-0 bg-gradient-to-br transition duration-500 group-hover:scale-105", TONES[f.label.toLowerCase()] ?? "from-rose-600 to-ink-950")} />
                 <span className="absolute inset-0 flex flex-col justify-between p-4">
                   <span className="flex items-start justify-between gap-2">
