@@ -7,6 +7,9 @@ import { GameError, newId, rateLimit } from "./util.js";
  * anyone signed in who has the link can look at it (that is how a tournament is shared), but
  * only the owner can change or delete it. The browser does the football maths; the server
  * stores the document and checks who may write it.
+ *
+ * The data is stored as one JSON string: Firestore refuses lists inside lists (a tournament's
+ * groups are exactly that), so its shape is never left to Firestore.
  */
 
 const KINDS = new Set(["tourney", "lineup"]);
@@ -27,7 +30,8 @@ export async function getCreation(identity, id) {
   const store = await getStore();
   const c = await store.get(`creations/${String(id ?? "").slice(0, 40)}`);
   if (!c) throw new GameError("That wasn't found. It may have been deleted.", 404);
-  return { ...summary(c), data: c.data, owner: c.owner, ownerName: c.ownerName ?? null, mine: c.owner === identity.uid };
+  const data = c.dataJson ? JSON.parse(c.dataJson) : c.data ?? null;
+  return { ...summary(c), data, owner: c.owner, ownerName: c.ownerName ?? null, mine: c.owner === identity.uid };
 }
 
 export async function saveCreation(identity, body) {
@@ -46,12 +50,13 @@ export async function saveCreation(identity, body) {
     const existing = await store.get(`creations/${id}`);
     if (!existing) throw new GameError("That wasn't found.", 404);
     if (existing.owner !== identity.uid) throw new GameError("Only the person who made this can change it.", 403);
-    await store.set(`creations/${id}`, { ...existing, name, data: JSON.parse(json), info: clean(body.info, 80) || null, updatedAt: now });
+    const { data: _old, ...rest } = existing;
+    await store.set(`creations/${id}`, { ...rest, name, dataJson: json, info: clean(body.info, 80) || null, updatedAt: now });
   } else {
     const mine = await store.count("creations", [["owner", "==", identity.uid]]);
     if (mine >= 200) throw new GameError("You've reached 200 saved items. Delete some first.");
     id = newId(10);
-    await store.set(`creations/${id}`, { id, kind, owner: identity.uid, ownerName: clean(identity.name, 40), name, data: JSON.parse(json), info: clean(body.info, 80) || null, createdAt: now, updatedAt: now });
+    await store.set(`creations/${id}`, { id, kind, owner: identity.uid, ownerName: clean(identity.name, 40), name, dataJson: json, info: clean(body.info, 80) || null, createdAt: now, updatedAt: now });
   }
   return { id, updatedAt: now };
 }
