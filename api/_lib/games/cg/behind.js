@@ -22,31 +22,56 @@ export const QUESTION_CHOICES = [5, 10, 15, 20];
 export const ROUND_CHOICES = [1, 3, 5];
 const ANSWERS = { yes: "Yes", no: "No", maybe: "Not sure" };
 
-let legends;
-function famous() {
-  if (!legends) {
-    const list = JSON.parse(readFileSync(new URL("../careers.json", import.meta.url), "utf8"));
-    legends = list.slice(0, 320).map((p) => ({ id: `c:${plain(p.name).replace(/ /g, "-")}`, name: p.name, team: p.path.at(-1)?.c ?? "" }));
+let known;
+/**
+ * Every footballer the site knows without asking anyone: the famous careers, everyone who played
+ * for the big clubs (the Club Grid list) and the shootout's stars. Always there, even on a server
+ * that has only just started.
+ */
+function knownPlayers() {
+  if (!known) {
+    const read = (f) => JSON.parse(readFileSync(new URL(`../${f}`, import.meta.url), "utf8"));
+    const careers = read("careers.json");
+    const both = read("bothclubs.json");
+    const stars = read("shootout_players.json");
+    const seen = new Set();
+    known = [];
+    const add = (name, team) => {
+      const key = plain(name);
+      if (!name || /^Q\d+$/.test(name) || seen.has(key)) return;
+      seen.add(key);
+      known.push({ id: `c:${key.replace(/ /g, "-")}`, name, team: team ?? "" });
+    };
+    for (const p of [...stars.shooters, ...stars.keepers]) add(p.name, p.team === "Legend" ? "" : p.team);
+    for (const p of careers) add(p.name, p.path.at(-1)?.c);
+    for (const p of [...both.players].sort((x, y) => (y.sl ?? 0) - (x.sl ?? 0))) add(p.name, both.clubs[p.clubs.at(-1)]);
   }
-  return legends;
+  return known;
 }
 
-/** Everyone who can be picked: today's top players and famous names from football history. */
+/** Everyone who can be picked: this season's players (when the league data is reachable) and everyone above. */
 export async function behindPlayers() {
-  // Today's players come from the league tables, which can take a few seconds to build on a cold
-  // server; don't keep anyone waiting for them: the famous names are always there straight away.
+  // This season's players come from the league tables, which can take a few seconds to build on a
+  // cold server; don't keep anyone waiting for them.
   const pool = await Promise.race([playerPool().catch(() => []), new Promise((r) => setTimeout(() => r([]), 4000))]);
   const current = pool.map((p) => ({ id: p.id, name: p.name, team: p.team }));
   const seen = new Set(current.map((p) => plain(p.name)));
-  const all = [...current, ...famous().filter((p) => !seen.has(plain(p.name)))];
+  const all = [...current, ...knownPlayers().filter((p) => !seen.has(plain(p.name)))];
   return all.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function lookup(id) {
-  const all = await behindPlayers();
-  const p = all.find((x) => x.id === String(id));
-  if (!p) throw new GameError("Pick a player from the list.");
-  return p;
+/**
+ * The player that was picked. Anyone from the list is accepted even if this server hasn't got this
+ * season's players yet (it uses the name and club the picker's screen sent), and a name typed by
+ * hand ("free:") is accepted as it is.
+ */
+async function lookup(id, body) {
+  const key = String(id ?? "");
+  const found = knownPlayers().find((x) => x.id === key) ?? (key.startsWith("c:") || key.startsWith("free:") ? null : (await behindPlayers()).find((x) => x.id === key));
+  if (found) return found;
+  const name = clean(body.name, 60);
+  if (name.length < 2) throw new GameError("Pick a player, or type their name.");
+  return { id: key || `free:${plain(name)}`, name, team: clean(body.team, 60) };
 }
 
 const cardOf = (p) => (p ? { name: p.name, team: p.team, photo: p.photo ?? null } : null);
@@ -151,8 +176,9 @@ export async function move(g, uid, body) {
 
     case "pick": {
       if (s.phase !== "pick" || uid !== s.picker) throw new GameError("It isn't time to pick.");
-      const p = await lookup(body.player);
-      const photo = await getPhoto(p.name, p.team).catch(() => null);
+      const p = await lookup(body.player, body);
+      // The club has to agree for a photo to count; if it doesn't (an old club, a typed name), try the name alone.
+      const photo = (await getPhoto(p.name, p.team).catch(() => null)) ?? (p.team ? await getPhoto(p.name, "").catch(() => null) : null);
       g.secret.card = { ...p, photo };
       s.phase = "ask";
       g.turn = s.guesser;

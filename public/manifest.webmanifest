@@ -1,7 +1,7 @@
 {
   "name": "Dixon Watch",
   "short_name": "Dixon Watch",
-  "description": "Watch live streams with no ads, pop-ups or fake buttons, plus live football scores.",
+  "description": "Ad-free live streams, live football scores and stats, and football games to play with friends.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

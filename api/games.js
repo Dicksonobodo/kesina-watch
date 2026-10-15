@@ -104,7 +104,7 @@ const ACTIONS = {
   "cg.get": (who, b) => getGame(who, String(b.id ?? ""), Number(b.v ?? -1)),
   "cg.move": (who, b) => moveGame(who, String(b.id ?? ""), b),
   "cg.rematch": (who, b) => rematchGame(who, String(b.id ?? "")),
-  "behind.players": async () => ({ players: await behindPlayers() }),
+  "behind.players": async () => ({ list: (await behindPlayers()).map((p) => [p.id, p.name, p.team]) }), // [id, name, club]: about 3,000 players, kept small
 
   /* lives an admin pinned for everyone (Live page) */
   "live.featured": () => listFeatured(),

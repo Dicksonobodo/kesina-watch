@@ -22,8 +22,8 @@ function usePlayers() {
     if (playersCache) return;
     gamesApi("behind.players")
       .then((r) => {
-        playersCache = r.players;
-        setList(r.players);
+        playersCache = (r.list ?? []).map(([id, name, team]) => ({ id, name, team }));
+        setList(playersCache);
       })
       .catch(() => setList([]));
   }, []);
@@ -62,6 +62,8 @@ export default function Behind({ game, move, busy, error }) {
   const [questions, setQuestions] = useState(10);
   const [rounds, setRounds] = useState(3);
   const [picked, setPicked] = useState(null);
+  const [typing, setTyping] = useState(false); // typing a name that isn't in the list
+  const [typed, setTyped] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [reveal, setReveal] = useState(null);
@@ -175,7 +177,26 @@ export default function Behind({ game, move, busy, error }) {
           {myTurn ? (
             <Panel glow>
               <p className="text-xs text-white/60">{opp.name} won't see who it is. You will, so you can answer their questions.</p>
-              <div className="mt-3">{players ? <NamePicker items={items} onPick={setPicked} placeholder="Search any footballer" autoFocus={false} /> : <div className="skeleton h-12 rounded-full" />}</div>
+              <div className="mt-3">{players ? <NamePicker items={items} onPick={setPicked} placeholder={`Search ${items.length > 1000 ? `${Math.floor(items.length / 100) * 100}+` : "any"} footballers`} autoFocus={false} /> : <div className="skeleton h-12 rounded-full" />}</div>
+              {typing ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const name = typed.trim();
+                    if (name.length >= 2) setPicked({ key: `free:${name.toLowerCase()}`, name, sub: "" });
+                  }}
+                  className="mt-2 flex gap-2"
+                >
+                  <input value={typed} onChange={(e) => setTyped(e.target.value)} maxLength={60} placeholder="Type the player's full name" aria-label="Player's name" className="h-11 min-w-0 flex-1 rounded-full bg-white/[.08] px-4 text-[15px] ring-1 ring-white/15 outline-none placeholder:text-white/40 focus:ring-signal/60" />
+                  <Button type="submit" disabled={typed.trim().length < 2}>
+                    Use
+                  </Button>
+                </form>
+              ) : (
+                <button onClick={() => setTyping(true)} className="mt-2 text-xs font-semibold text-signal">
+                  Can't find them? Type their name
+                </button>
+              )}
               {picked && (
                 <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white/[.06] p-3">
                   <PlayerBadge name={picked.name} team={picked.sub} className="size-12 rounded-xl text-sm" />
@@ -183,7 +204,7 @@ export default function Behind({ game, move, busy, error }) {
                     <span className="block truncate font-semibold">{picked.name}</span>
                     <span className="block truncate text-xs text-white/60">{picked.sub}</span>
                   </span>
-                  <Button size="sm" onClick={async () => (await act({ do: "pick", player: picked.key })) && setPicked(null)} loading={busy}>
+                  <Button size="sm" onClick={async () => (await act({ do: "pick", player: picked.key, name: picked.name, team: picked.sub })) && (setPicked(null), setTyping(false), setTyped(""))} loading={busy}>
                     Send
                   </Button>
                 </div>
