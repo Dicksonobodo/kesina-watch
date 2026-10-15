@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowDown, ArrowUp, MapPin, RefreshCw, Tv, Users, X } from "lucide-react";
+import { ArrowDown, ArrowUp, MapPin, Play, RefreshCw, Tv, Users, X } from "lucide-react";
 import { LiveDot } from "@/components/ui/Badge";
 import { BallIcon } from "@/components/ui/BallIcon";
 import { Spinner } from "@/components/ui/Spinner";
@@ -129,7 +129,8 @@ export function MatchCentre({ match: base, onClose }) {
             </div>
             <TeamHead team={m.away} onOpen={() => m.away.id && setTeamId(m.away.id)} />
           </div>
-          <Scorers events={m.events} />
+          <Scorers events={m.events} clips={m.highlights} onPlay={setClip} />
+          <WatchButton clips={m.highlights} onPlay={setClip} />
           <div className="relative mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11.5px] text-mist-500">
             {m.venue && (
               <span className="flex items-center gap-1">
@@ -181,7 +182,7 @@ export function MatchCentre({ match: base, onClose }) {
                   <div className="space-y-8">
                     <Highlights clips={m.highlights} onPlay={setClip} />
                     <Performers match={m} onOpenPlayer={openPlayer} />
-                    <Timeline match={m} />
+                    <Timeline match={m} onPlay={setClip} />
                   </div>
                 )}
                 {tab === "commentary" && <Commentary lines={m.commentary} />}
@@ -224,7 +225,7 @@ export function MatchCentre({ match: base, onClose }) {
             }}
           />
         )}
-        {clip && <HighlightPlayer key={clip.id} clip={clip} onClose={() => setClip(null)} />}
+        {clip && <HighlightPlayer key={clip.id} clip={clip} next={nextGoalClip(m.highlights, clip)} onNext={setClip} onClose={() => setClip(null)} />}
       </AnimatePresence>
     </motion.div>,
     document.body,
@@ -250,20 +251,59 @@ function TeamHead({ team, onOpen }) {
   );
 }
 
-function Scorers({ events }) {
+function Scorers({ events, clips, onPlay }) {
   const goals = (events ?? []).filter((e) => e.kind === "goal" || e.kind === "own-goal");
   if (!goals.length) return null;
+  const clipOf = (g) => (g.clip ? clips?.find((c) => c.id === g.clip) : null);
   const line = (side) =>
     goals
       .filter((g) => g.side === side)
-      .map((g) => `${lastName(g.players[0])} ${g.clock}${g.kind === "own-goal" ? " (og)" : /penalty/i.test(g.label) ? " (pen)" : ""}`);
+      .map((g, i, all) => {
+        const text = `${lastName(g.players[0])} ${g.clock}${g.kind === "own-goal" ? " (og)" : /penalty/i.test(g.label) ? " (pen)" : ""}`;
+        const clip = clipOf(g);
+        return (
+          <span key={i} className="whitespace-nowrap">
+            {clip ? (
+              <button onClick={() => onPlay(clip)} className="inline-flex items-center gap-1 rounded-full text-mist-100 underline decoration-signal/50 underline-offset-2 hover:text-signal" title="Watch the goal">
+                <Play className="size-2.5 text-signal" fill="currentColor" />
+                {text}
+              </button>
+            ) : (
+              text
+            )}
+            {i < all.length - 1 ? ", " : ""}
+          </span>
+        );
+      });
   return (
     <div className="relative mt-3 grid grid-cols-[1fr_auto_1fr] gap-3 text-[11.5px] text-mist-300">
-      <p className="text-right leading-relaxed">{line("home").join(", ")}</p>
+      <p className="text-right leading-relaxed">{line("home")}</p>
       <BallIcon className="mt-0.5 size-3" />
-      <p className="leading-relaxed">{line("away").join(", ")}</p>
+      <p className="leading-relaxed">{line("away")}</p>
     </div>
   );
+}
+
+/** "Watch highlights" (the full clip) or "Watch the goals", when there are clips to watch. */
+function WatchButton({ clips, onPlay }) {
+  const full = clips?.find((c) => c.kind === "full");
+  const goals = (clips ?? []).filter((c) => c.kind === "goal");
+  if (!full && !goals.length) return null;
+  return (
+    <div className="relative mt-3 flex justify-center">
+      <button onClick={() => onPlay(full ?? goals[0])} className="inline-flex items-center gap-2 rounded-full bg-signal px-4 py-2 text-[13px] font-bold text-ink-950 shadow-[0_0_30px_-8px_rgb(198_255_61/.8)] transition hover:brightness-110 active:scale-95">
+        <Play className="size-3.5" fill="currentColor" />
+        {full ? "Watch highlights" : goals.length === 1 ? "Watch the goal" : `Watch the goals (${goals.length})`}
+      </button>
+    </div>
+  );
+}
+
+/** After a goal clip, the next goal's clip (so the goals play one after another). */
+function nextGoalClip(clips, current) {
+  if (current?.kind !== "goal") return null;
+  const goals = (clips ?? []).filter((c) => c.kind === "goal");
+  return goals[goals.findIndex((c) => c.id === current.id) + 1] ?? null;
 }
 
 const lastName = (name = "") => name.split(" ").slice(-1)[0];
@@ -294,8 +334,9 @@ function eventText(e) {
   return { main: a ?? e.label, sub: "" };
 }
 
-function Timeline({ match }) {
+function Timeline({ match, onPlay }) {
   const events = match.events;
+  const clipOf = (e) => (e.clip ? match.highlights?.find((c) => c.id === e.clip) : null);
   if (!events.length) {
     return <p className="py-10 text-center text-sm text-mist-500">{match.state === "pre" ? "The timeline starts at kick-off." : "No key moments yet."}</p>;
   }
@@ -314,9 +355,16 @@ function Timeline({ match }) {
         }
         const { main, sub } = eventText(e);
         const home = e.side === "home";
+        const clip = clipOf(e);
+        const watch = clip && (
+          <button onClick={() => onPlay(clip)} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-signal/15 px-2 py-0.5 text-[10.5px] font-bold text-signal ring-1 ring-signal/30 transition hover:bg-signal/25" aria-label={`Watch ${main}'s goal`}>
+            <Play className="size-2.5" fill="currentColor" /> Watch
+          </button>
+        );
         return (
           <li key={i} className="relative grid grid-cols-[1fr_44px_1fr] items-center gap-2 py-1.5">
             <div className={cn("flex items-center gap-2.5", home ? "justify-end text-right" : "invisible")}>
+              {home && watch}
               {home && <EventBody main={main} sub={sub} />}
               {home && <EventIcon kind={e.kind} />}
             </div>
@@ -324,6 +372,7 @@ function Timeline({ match }) {
             <div className={cn("flex items-center gap-2.5", !home ? "" : "invisible")}>
               {!home && <EventIcon kind={e.kind} />}
               {!home && <EventBody main={main} sub={sub} />}
+              {!home && watch}
             </div>
           </li>
         );

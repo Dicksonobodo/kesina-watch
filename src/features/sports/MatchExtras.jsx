@@ -22,6 +22,8 @@ function Section({ title, children, className }) {
 
 const mmss = (s) => (s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "");
 
+const KIND_LABEL = { full: "Full highlights", save: "Save", chance: "Near miss" };
+
 export function Highlights({ clips, onPlay }) {
   if (!clips?.length) return null;
   return (
@@ -37,6 +39,11 @@ export function Highlights({ clips, onPlay }) {
                 </span>
               </span>
               {c.duration && <span className="absolute right-2 bottom-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">{mmss(c.duration)}</span>}
+              {(c.kind === "goal" || KIND_LABEL[c.kind]) && (
+                <span className={cn("absolute top-2 left-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold", c.kind === "goal" ? "bg-signal text-ink-950" : c.kind === "full" ? "bg-white text-ink-950" : "bg-black/70 text-white")}>
+                  {c.kind === "goal" ? <>⚽ Goal{c.clock ? ` · ${c.clock}` : ""}</> : KIND_LABEL[c.kind]}
+                </span>
+              )}
             </div>
             <p className="mt-2 line-clamp-2 text-[13px] leading-snug font-medium">{c.title}</p>
           </button>

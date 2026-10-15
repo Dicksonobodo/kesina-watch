@@ -90,6 +90,59 @@ function eventKind(type = "") {
   return null;
 }
 
+const plainText = (s = "") => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const GOAL_WORDS = /\b(goal|scores?|scored|slots|finish(es)?|header|strike|nets?|equali[sz]er|winner|brace|hat-?trick|penalty|volley|curls?|chips?|fires?|bags?|stunner|rocket|own goal)\b/i;
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * ESPN's clips for a match, best first: the full highlights, then the goals in the order they were
+ * scored, then saves and near misses, then anything else. A goal clip is tied to its goal (goal.clip = clip id) when
+ * the headline names the scorer ("Carlos Alvarez slots in the goal for Levante"). Plain MP4 plays
+ * straight in a <video>. `geo` says where ESPN allows a clip to be shown; the API route uses it.
+ */
+function clipsFor(videos, events) {
+  const seen = new Set();
+  const clips = (videos ?? [])
+    .filter((v) => v.links?.source?.href)
+    .filter((v) => {
+      const key = plainText(v.headline);
+      if (seen.has(key)) return false; // ESPN sometimes lists the same clip twice
+      seen.add(key);
+      return true;
+    })
+    .map((v) => {
+      const title = v.headline ?? "Highlights";
+      const geo = v.geoRestrictions?.countries?.length ? { type: v.geoRestrictions.type === "blacklist" ? "blacklist" : "whitelist", countries: v.geoRestrictions.countries } : null;
+      return {
+        id: String(v.id),
+        title,
+        duration: v.duration ?? null,
+        thumbnail: v.thumbnail ?? null,
+        mp4: v.links.source.href,
+        hls: v.links.source.HLS?.href ?? null,
+        kind: /highlights/i.test(title) ? "full" : /\bsaves?\b/i.test(title) ? "save" : /woodwork|\bpost\b|crossbar|hits the bar|\bmiss(es|ed)?\b|\bdenied\b/i.test(title) ? "chance" : GOAL_WORDS.test(title) ? "goal" : "other",
+        geo,
+      };
+    });
+  const goals = events.filter((e) => e.kind === "goal" || e.kind === "own-goal");
+  for (const c of clips) {
+    if (c.kind !== "goal") continue;
+    const h = plainText(c.title);
+    const named = (e) => {
+      const words = plainText(e.players[0] ?? "").split(/\s+/).filter((w) => w.length >= 3);
+      const last = words.at(-1);
+      return Boolean(last && new RegExp(`\\b${escapeRe(last)}\\b`).test(h)) || words.slice(0, -1).some((w) => w.length >= 4 && new RegExp(`\\b${escapeRe(w)}\\b`).test(h));
+    };
+    const goal = goals.find((e) => !e.clip && named(e)); // a brace: the earlier goal takes the first clip
+    if (goal) {
+      goal.clip = c.id;
+      Object.assign(c, { kind: "goal", scorer: goal.players[0] ?? null, clock: goal.clock, side: goal.side, order: goals.indexOf(goal) });
+    }
+  }
+  const rank = { full: 0, goal: 1, save: 2, chance: 2, other: 3 };
+  return clips.sort((a, b) => rank[a.kind] - rank[b.kind] || (a.order ?? 99) - (b.order ?? 99)).slice(0, 12);
+}
+
 /** Everything for one match: score, timeline, line-ups / formations, stats, table. */
 export async function getMatch({ league, id }) {
   const info = leagueById(league);
@@ -185,18 +238,8 @@ export async function getMatch({ league, id }) {
             .map((p) => ({ clock: [p.period?.displayValue, p.clock?.displayValue].filter(Boolean).join(" "), text: p.text, type: p.type?.text ?? "" }))
             .reverse(),
 
-      // Official highlight clips (ESPN). Plain MP4 plays straight in a <video>.
-      highlights: (j.videos ?? [])
-        .filter((v) => v.links?.source?.href)
-        .slice(0, 6)
-        .map((v) => ({
-          id: String(v.id),
-          title: v.headline ?? "Highlights",
-          duration: v.duration ?? null,
-          thumbnail: v.thumbnail ?? null,
-          mp4: v.links.source.href,
-          hls: v.links.source.HLS?.href ?? null,
-        })),
+      // Official highlight clips (ESPN), each goal clip tied to its goal in the timeline.
+      highlights: clipsFor(j.videos, events),
 
       // Best player per stat, for each team.
       performers: (j.leaders ?? []).map((t) => ({

@@ -279,12 +279,25 @@ export function TeamSheet({ league, id, onClose, onOpenPlayer }) {
 
 /* ---------- highlights ---------- */
 
-export function HighlightPlayer({ clip, onClose }) {
+/** A highlight clip. For goal clips, the next goal plays when this one ends (or with "Next goal"). */
+export function HighlightPlayer({ clip, next = null, onNext, onClose }) {
+  const [failed, setFailed] = useState(false);
   return (
     <Sheet onClose={onClose} label={clip.title} z="z-[99]" wide>
       <div className="p-3 sm:p-4">
-        <video src={clip.mp4} poster={clip.thumbnail ?? undefined} controls autoPlay playsInline className="aspect-video w-full rounded-2xl bg-black" />
-        <p className="mt-3 px-2 pb-2 font-semibold">{clip.title}</p>
+        {failed ? (
+          <div className="grid aspect-video w-full place-items-center rounded-2xl bg-black px-6 text-center text-sm text-mist-300">This clip can't be played right now.</div>
+        ) : (
+          <video src={clip.mp4} poster={clip.thumbnail ?? undefined} controls autoPlay playsInline onError={() => setFailed(true)} onEnded={() => next && onNext?.(next)} className="aspect-video w-full rounded-2xl bg-black" />
+        )}
+        <div className="flex items-start gap-3 px-2 pt-3 pb-2">
+          <p className="min-w-0 flex-1 font-semibold">{clip.title}</p>
+          {next && (
+            <button onClick={() => onNext?.(next)} className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/[.08] px-3 py-1.5 text-xs font-semibold text-signal ring-1 ring-white/10 transition hover:bg-white/[.12]">
+              Next goal{next.clock ? ` · ${next.clock}` : ""} ›
+            </button>
+          )}
+        </div>
       </div>
     </Sheet>
   );
