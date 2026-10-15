@@ -179,6 +179,30 @@ export const teamName = (t, id) => t.teams.find((x) => x.id === id)?.name ?? "?"
 export const groupFixtures = (t, gi) => t.fixtures.filter((f) => f.stage === "group" && f.group === gi);
 export const groupTable = (t, gi) => table(t, t.groups[gi], groupFixtures(t, gi));
 export const groupsDone = (t) => t.fixtures.filter((f) => f.stage === "group").every((f) => played(t.scores[f.id]));
+export const groupDone = (t, gi) => groupFixtures(t, gi).every((f) => played(t.scores[f.id]));
+
+/**
+ * Who goes through from a group: the organiser's own pick if they made one (for a tie on points,
+ * or a group that can't be finished), otherwise the top two of the table once the group is over.
+ * Returns { ids: [first, second], manual } or null while it isn't decided yet.
+ */
+export function qualifiers(t, gi) {
+  const pick = t.qualifiers?.[gi];
+  if (Array.isArray(pick) && pick.length === 2 && pick[0] && pick[1]) return { ids: pick, manual: true };
+  if (!groupDone(t, gi)) return null;
+  const rows = groupTable(t, gi);
+  return rows.length >= 2 ? { ids: [rows[0].id, rows[1].id], manual: false } : null;
+}
+
+/** Where the tournament is: "Group stage", "Quarter-finals", "Final", "Finished"… */
+export function stage(t) {
+  if (champion(t).final) return "Finished";
+  if (t.format === "league") return "League";
+  if (t.groups && !t.groups.every((_, gi) => qualifiers(t, gi))) return "Group stage";
+  const memo = new Map();
+  for (const round of t.ko?.rounds ?? []) if (round.ties.some((tie) => !resolveTie(t, tie, memo).done)) return round.name;
+  return "Final";
+}
 
 /** The legs (matches) of a tie, home team first. */
 export const tieLegs = (tie) => (tie.legs === 2 ? [`${tie.id}-1`, `${tie.id}-2`] : [`${tie.id}-1`]);
@@ -234,9 +258,9 @@ export function resolveSource(t, src, memo) {
   if (src.type === "team") return { id: src.id, label: teamName(t, src.id) };
   if (src.type === "group") {
     const label = `${src.pos === 1 ? "Winner" : "Runner-up"} Group ${groupLetter(src.group)}`;
-    if (!groupsDone(t)) return { id: null, label };
-    const row = groupTable(t, src.group)[src.pos - 1];
-    return row ? { id: row.id, label: row.name, from: label } : { id: null, label };
+    const q = qualifiers(t, src.group);
+    const id = q?.ids[src.pos - 1];
+    return id ? { id, label: teamName(t, id), from: label } : { id: null, label };
   }
   const tie = findTie(t, src.tie);
   const r = tie ? resolveTie(t, tie, memo) : null;
@@ -260,12 +284,12 @@ export function tieTitle(t, id) {
   }
   return id;
 }
-const short = (name) => ({ "Quarter-finals": "QF", "Semi-finals": "SF", Final: "Final" })[name] ?? name.replace("Round of ", "R");
+const short = (name) => ({ "Quarter-finals": "Quarter-final", "Semi-finals": "Semi-final", Final: "Final" })[name] ?? name;
 
 /** Who won it (or who leads a league that isn't finished). */
 export function champion(t) {
   if (t.format === "league") {
-    const all = t.fixtures.every((f) => played(t.scores[f.id]));
+    const all = t.ended || t.fixtures.every((f) => played(t.scores[f.id]));
     const top = table(t, t.teams.map((x) => x.id), t.fixtures)[0];
     return { id: top?.id ?? null, name: top?.name ?? null, final: all };
   }

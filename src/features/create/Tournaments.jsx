@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { motion } from "motion/react";
-import { ArrowLeft, Check, Copy, Crown, ListOrdered, Plus, RefreshCw, Shuffle, Trash2, Trophy, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowLeft, Check, ChevronDown, Copy, Crown, Info, ListOrdered, PencilLine, Plus, RefreshCw, Shuffle, Trash2, Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
@@ -257,6 +257,9 @@ export function TournamentView() {
   const [saveState, setSaveState] = useState("saved"); // saved | saving | unsaved | error
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editing, setEditing] = useState(null); // { id, home, away, tie? } match whose result is being entered
+  const [picking, setPicking] = useState(null); // group index whose qualifiers are being chosen
+  const [help, setHelp] = useState(false);
   const timer = useRef(0);
 
   const load = useCallback(() => {
@@ -270,7 +273,7 @@ export function TournamentView() {
   }, [id]);
   useEffect(load, [load]);
 
-  // Someone else's tournament: refresh every 30 seconds so the scores keep up.
+  // Someone else's tournament: refresh every 30 seconds so the results keep up.
   useEffect(() => {
     if (!doc || doc.mine) return;
     const timerId = setInterval(load, 30_000);
@@ -286,29 +289,35 @@ export function TournamentView() {
         try {
           const p = T.progress(next);
           const ch = T.champion(next);
-          const info = `${T.FORMATS[next.format].title} · ${next.teams.length} teams · ${ch.final ? `🏆 ${ch.name}` : `${p.played}/${p.total} played`}`;
+          const info = `${T.FORMATS[next.format].title} · ${next.teams.length} teams · ${ch.final ? `🏆 ${ch.name}` : `${T.stage(next)} · ${p.played}/${p.total} played`}`;
           await gamesApi("create.save", { id, kind: "tourney", name: next.name, data: next, info });
           setSaveState("saved");
         } catch {
           setSaveState("error");
         }
-      }, 700);
+      }, 500);
     },
     [id],
   );
 
-  function setScore(matchId, patch) {
-    setT((cur) => {
-      const scores = { ...cur.scores };
-      const merged = { ...(scores[matchId] ?? {}), ...patch };
-      for (const k of Object.keys(merged)) if (merged[k] === null || merged[k] === undefined) delete merged[k];
-      if (Object.keys(merged).length) scores[matchId] = merged;
-      else delete scores[matchId];
-      const next = { ...cur, scores };
-      save(next);
+  const update = useCallback(
+    (fn) => {
+      setT((cur) => {
+        const next = fn(structuredClone(cur));
+        save(next);
+        return next;
+      });
+    },
+    [save],
+  );
+
+  /** Save (or clear, with null) the result of one match. */
+  const saveResult = (matchId, result) =>
+    update((next) => {
+      if (result) next.scores[matchId] = result;
+      else delete next.scores[matchId];
       return next;
     });
-  }
 
   async function remove() {
     if (!confirmDelete) return setConfirmDelete(true);
@@ -345,7 +354,9 @@ export function TournamentView() {
   const editable = doc.mine;
   const ch = T.champion(t);
   const p = T.progress(t);
-  const tabs = t.format === "league" ? [["table", "Table"], ["fixtures", "Fixtures"]] : t.format === "cup" ? [["bracket", "Bracket"]] : [["groups", "Groups"], ["bracket", "Knockout"]];
+  const stageName = T.stage(t);
+  const tabs = t.format === "league" ? [["table", "Table"], ["fixtures", "Results"]] : t.format === "cup" ? [["bracket", "Bracket"]] : [["groups", "Groups"], ["bracket", "Knockout"]];
+  const open = (m) => editable && setEditing(m);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -360,7 +371,7 @@ export function TournamentView() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {editable && <span className={cn("text-xs", saveState === "error" ? "text-live" : "text-mist-500")}>{saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Editing…" : saveState === "error" ? "Couldn't save. Check your connection." : "✓ Saved"}</span>}
+          {editable && <span className={cn("text-xs", saveState === "error" ? "text-live" : "text-mist-500")}>{saveState === "saving" ? "Saving…" : saveState === "unsaved" ? "Saving…" : saveState === "error" ? "Couldn't save. Check your connection." : "✓ Saved"}</span>}
           {!editable && (
             <Button variant="ghost" size="sm" onClick={load}>
               <RefreshCw className="size-4" /> Refresh
@@ -377,8 +388,11 @@ export function TournamentView() {
         </div>
       </div>
 
+      {/* where the tournament is */}
+      <Stages t={t} current={stageName} />
+
       {ch.final && (
-        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mt-5 flex items-center gap-4 rounded-3xl bg-gradient-to-r from-amber-400/20 via-amber-300/10 to-transparent p-5 ring-1 ring-amber-300/40">
+        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mt-4 flex items-center gap-4 rounded-3xl bg-gradient-to-r from-amber-400/20 via-amber-300/10 to-transparent p-5 ring-1 ring-amber-300/40">
           <span className="grid size-14 place-items-center rounded-2xl bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-lg">
             <Crown className="size-7" fill="currentColor" />
           </span>
@@ -389,9 +403,24 @@ export function TournamentView() {
         </motion.div>
       )}
 
-      {!editable && <p className="mt-4 rounded-2xl bg-white/[.04] px-4 py-2.5 text-xs text-mist-500">You're watching this tournament. Only the person who made it can enter scores.</p>}
+      {/* how it works */}
+      <div className="mt-4 rounded-2xl bg-white/[.03] ring-1 ring-white/[.07]">
+        <button onClick={() => setHelp((h) => !h)} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold">
+          <Info className="size-4 text-signal" /> How this tournament works
+          <ChevronDown className={cn("ml-auto size-4 text-mist-500 transition", help && "rotate-180")} />
+        </button>
+        {help && <HowItWorks t={t} editable={editable} />}
+      </div>
 
-      <div className="mt-5 flex gap-1 overflow-x-auto rounded-2xl bg-white/[.03] p-1 ring-1 ring-white/[.06]">
+      {editable ? (
+        <p className="mt-3 flex items-center gap-2 text-xs text-mist-500">
+          <PencilLine className="size-3.5 text-signal" /> Tap any match to add or change its result. Tables and the bracket update by themselves.
+        </p>
+      ) : (
+        <p className="mt-3 rounded-2xl bg-white/[.04] px-4 py-2.5 text-xs text-mist-500">You're following this tournament. Only the organiser can add results.</p>
+      )}
+
+      <div className="mt-4 flex gap-1 overflow-x-auto rounded-2xl bg-white/[.03] p-1 ring-1 ring-white/[.06]">
         {tabs.map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} className={cn("flex-1 rounded-xl px-4 py-2 text-sm font-semibold whitespace-nowrap transition", tab === k ? "bg-white/[.1] text-white" : "text-mist-500 hover:text-mist-100")}>
             {label}
@@ -400,25 +429,101 @@ export function TournamentView() {
       </div>
 
       <div className="mt-4">
-        {tab === "table" && <TableCard t={t} rows={T.table(t, t.teams.map((x) => x.id), t.fixtures)} highlight={1} />}
-        {tab === "fixtures" && <Fixtures t={t} fixtures={t.fixtures} editable={editable} setScore={setScore} />}
+        {tab === "table" && (
+          <>
+            <TableCard t={t} rows={T.table(t, t.teams.map((x) => x.id), t.fixtures)} highlight={1} leader />
+            {editable && !ch.final && (
+              <button onClick={() => update((n) => ((n.ended = true), n))} className="mt-3 text-xs font-semibold text-mist-500 underline-offset-2 hover:text-signal hover:underline">
+                Stop the league now and crown the leader
+              </button>
+            )}
+            {editable && t.ended && (
+              <button onClick={() => update((n) => (delete n.ended, n))} className="mt-3 text-xs font-semibold text-signal">
+                Re-open the league
+              </button>
+            )}
+          </>
+        )}
+        {tab === "fixtures" && <Fixtures t={t} fixtures={t.fixtures} editable={editable} onOpen={open} />}
         {tab === "groups" && (
           <div className="grid gap-4 lg:grid-cols-2">
             {t.groups.map((_, gi) => (
-              <div key={gi} className="space-y-2">
-                <TableCard t={t} title={`Group ${T.groupLetter(gi)}`} rows={T.groupTable(t, gi)} highlight={2} />
-                <Fixtures t={t} fixtures={T.groupFixtures(t, gi)} editable={editable} setScore={setScore} compact />
-              </div>
+              <GroupCard key={gi} t={t} gi={gi} editable={editable} onOpen={open} onPick={() => setPicking(gi)} />
             ))}
           </div>
         )}
-        {tab === "bracket" && <Bracket t={t} editable={editable} setScore={setScore} />}
+        {tab === "bracket" && <Bracket t={t} editable={editable} onOpen={open} />}
+      </div>
+
+      <AnimatePresence>
+        {editing && <ResultSheet t={t} match={editing} onClose={() => setEditing(null)} onSave={(r) => (saveResult(editing.id, r), setEditing(null))} />}
+        {picking !== null && (
+          <QualifierSheet
+            t={t}
+            gi={picking}
+            onClose={() => setPicking(null)}
+            onSave={(ids) => {
+              update((n) => {
+                n.qualifiers = { ...(n.qualifiers ?? {}) };
+                if (ids) n.qualifiers[picking] = ids;
+                else delete n.qualifiers[picking];
+                return n;
+              });
+              setPicking(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ---------- where we are ---------- */
+
+function Stages({ t, current }) {
+  const steps = t.format === "league" ? ["League", "Finished"] : [...(t.groups ? ["Group stage"] : []), ...t.ko.rounds.map((r) => r.name), "Finished"];
+  const at = Math.max(0, steps.indexOf(current));
+  return (
+    <div className="-mx-4 mt-4 overflow-x-auto px-4">
+      <div className="flex w-max items-center gap-1.5">
+        {steps.map((s, i) => (
+          <span key={s} className="flex items-center gap-1.5">
+            <span className={cn("rounded-full px-3 py-1 text-[12px] font-semibold whitespace-nowrap ring-1", i < at ? "bg-signal/10 text-signal ring-signal/30" : i === at ? "bg-signal text-ink-950 ring-signal" : "bg-white/[.03] text-mist-500 ring-white/[.08]")}>
+              {i < at && "✓ "}
+              {s}
+            </span>
+            {i < steps.length - 1 && <span className="h-px w-3 bg-white/15" />}
+          </span>
+        ))}
       </div>
     </div>
   );
 }
 
-function TableCard({ t, rows, title, highlight = 0 }) {
+function HowItWorks({ t, editable }) {
+  const groups = t.groups?.length ?? 0;
+  const points = "A win is 3 points, a draw 1. Teams level on points are split by goal difference, then goals scored, then the matches between them.";
+  const lines = {
+    league: [`Everyone plays everyone${t.legs === 2 ? " twice (home and away)" : " once"}.`, points, "When every match has a result, the team on top is the champion."],
+    ucl: [`${groups} groups. Teams play each other home and away.`, points, "The top two of each group go through as soon as that group's matches are all played. Group winners meet runners-up from another group.", "Knockout rounds are two matches (home and away); goals are added up. If it's level, there's a penalty shoot-out after the second match.", "The final is one match."],
+    worldcup: [`${groups} groups. Each team plays the others in its group once.`, points, "The top two of each group go through as soon as that group's matches are all played. Group winners meet runners-up from another group.", "Every knockout is one match. A draw goes to penalties.", "The semi-final losers play for third place."],
+    cup: ["Straight knockout: lose and you're out.", t.ko.rounds[0].ties.some((x) => x.b.type === "bye") ? "Some teams start with a bye (they go straight to the next round) so the bracket works out." : null, t.ko.rounds[0].ties[0].legs === 2 ? "Each round is two matches with goals added up; the final is one match." : "Every round is one match.", "A draw goes to penalties. The winner moves on by itself."],
+  }[t.format].filter(Boolean);
+  return (
+    <div className="space-y-2 px-4 pb-4 text-[13px] leading-relaxed text-mist-300">
+      {lines.map((l) => (
+        <p key={l} className="flex gap-2">
+          <span className="text-signal">•</span> {l}
+        </p>
+      ))}
+      {editable && t.groups && <p className="flex gap-2 text-mist-500"><span className="text-signal">•</span> Two teams level and you want to decide yourselves, or a group can't finish? Use "Choose who goes through" under that group.</p>}
+    </div>
+  );
+}
+
+/* ---------- tables and matches ---------- */
+
+function TableCard({ t, rows, title, highlight = 0, qualified = null, leader = false }) {
   return (
     <div className="overflow-hidden rounded-3xl bg-white/[.03] ring-1 ring-white/[.07]">
       {title && <p className="border-b border-white/[.06] px-4 py-2.5 font-display text-[15px] font-bold">{title}</p>}
@@ -436,61 +541,88 @@ function TableCard({ t, rows, title, highlight = 0 }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.id} className="border-t border-white/[.04]">
-                <td className="py-2 pl-4">
-                  <span className={cn("grid size-6 place-items-center rounded-md font-mono text-[11px]", i < highlight ? "bg-signal/15 text-signal" : "text-mist-500")}>{i + 1}</span>
-                </td>
-                <td className="max-w-40 truncate py-2 font-medium">{r.name}</td>
-                <td className="px-1.5 text-center tabular-nums text-mist-300">{r.p}</td>
-                <td className="px-1.5 text-center tabular-nums text-mist-300">{r.w}</td>
-                <td className="px-1.5 text-center tabular-nums text-mist-300">{r.d}</td>
-                <td className="px-1.5 text-center tabular-nums text-mist-300">{r.l}</td>
-                <td className="px-1.5 text-center tabular-nums text-mist-300">{r.gd > 0 ? `+${r.gd}` : r.gd}</td>
-                <td className="px-1.5 pr-4 text-center font-bold tabular-nums">{r.pts}</td>
-              </tr>
-            ))}
+            {rows.map((r, i) => {
+              const q = qualified?.includes(r.id);
+              return (
+                <tr key={r.id} className={cn("border-t border-white/[.04]", q && "bg-signal/[.06]")}>
+                  <td className="py-2 pl-4">
+                    <span className={cn("grid size-6 place-items-center rounded-md font-mono text-[11px]", q || (!qualified && i < highlight) ? "bg-signal/15 text-signal" : "text-mist-500")}>{i + 1}</span>
+                  </td>
+                  <td className="max-w-40 truncate py-2 font-medium">
+                    {r.name}
+                    {q && <span className="ml-1.5 rounded bg-signal px-1 font-mono text-[9px] font-bold text-ink-950">Q</span>}
+                    {leader && i === 0 && r.p > 0 && <Crown className="ml-1.5 inline size-3.5 text-amber-300" />}
+                  </td>
+                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.p}</td>
+                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.w}</td>
+                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.d}</td>
+                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.l}</td>
+                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.gd > 0 ? `+${r.gd}` : r.gd}</td>
+                  <td className="px-1.5 pr-4 text-center font-bold tabular-nums">{r.pts}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      {highlight > 0 && t.format !== "league" && <p className="px-4 pb-2.5 text-[11px] text-mist-500">Top {highlight} go through to the knockouts.</p>}
     </div>
   );
 }
 
-function ScoreBox({ value, onChange, editable, label }) {
-  if (!editable) return <span className="w-8 text-center font-display text-lg font-bold tabular-nums">{Number.isFinite(value) ? value : "–"}</span>;
+function GroupCard({ t, gi, editable, onOpen, onPick }) {
+  const fixtures = T.groupFixtures(t, gi);
+  const playedCount = fixtures.filter((f) => T.played(t.scores[f.id])).length;
+  const q = T.qualifiers(t, gi);
   return (
-    <input
-      inputMode="numeric"
-      aria-label={label}
-      value={Number.isFinite(value) ? value : ""}
-      onChange={(e) => {
-        const v = e.target.value.replace(/\D/g, "").slice(0, 2);
-        onChange(v === "" ? null : Number(v));
-      }}
-      placeholder="–"
-      className="h-9 w-10 rounded-xl bg-white/[.07] text-center font-display text-lg font-bold tabular-nums ring-1 ring-white/10 outline-none placeholder:text-mist-700 focus:ring-signal/60"
-    />
+    <div className="space-y-2">
+      <TableCard t={t} title={`Group ${T.groupLetter(gi)}`} rows={T.groupTable(t, gi)} highlight={2} qualified={q?.ids ?? null} />
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs">
+        <span className={q ? "font-semibold text-signal" : "text-mist-500"}>
+          {q ? `${q.manual ? "Picked by the organiser" : "Group finished"}: ${q.ids.map((x) => T.teamName(t, x)).join(" and ")} go through` : `${playedCount} of ${fixtures.length} matches played · top 2 go through`}
+        </span>
+        {editable && (
+          <button onClick={onPick} className="font-semibold text-signal">
+            {q?.manual ? "Change who goes through" : "Choose who goes through"}
+          </button>
+        )}
+      </div>
+      <Fixtures t={t} fixtures={fixtures} editable={editable} onOpen={onOpen} compact />
+    </div>
   );
 }
 
-function MatchRow({ t, id, home, away, homeLabel, awayLabel, editable, setScore }) {
-  const s = t.scores[id] ?? {};
+/** One match: tap it (organiser) to add or change the result. */
+function MatchButton({ t, id, home, away, homeLabel, awayLabel, editable, onOpen, note }) {
+  const s = t.scores[id];
   const ready = Boolean(home && away);
-  const result = T.played(s) ? (s.h > s.a ? "h" : s.h < s.a ? "a" : "d") : null;
+  const done = T.played(s);
+  const result = done ? (s.h > s.a ? "h" : s.h < s.a ? "a" : "d") : null;
+  const canEdit = editable && ready;
   return (
-    <div className="flex items-center gap-2 py-2">
+    <button
+      disabled={!canEdit}
+      onClick={() => onOpen({ id, home, away, note })}
+      className={cn("flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left transition", canEdit && "hover:bg-white/[.05] active:scale-[.99]")}
+    >
       <span className={cn("min-w-0 flex-1 truncate text-right text-sm", result === "h" && "font-bold", !home && "text-mist-500 italic")}>{home ? T.teamName(t, home) : homeLabel}</span>
-      <ScoreBox editable={editable && ready} value={s.h} onChange={(v) => setScore(id, { h: v })} label="Home score" />
-      <span className="text-mist-700">:</span>
-      <ScoreBox editable={editable && ready} value={s.a} onChange={(v) => setScore(id, { a: v })} label="Away score" />
+      {done ? (
+        <span className="flex shrink-0 flex-col items-center">
+          <span className="rounded-lg bg-white/[.08] px-2.5 py-1 font-display text-[15px] font-bold tabular-nums">
+            {s.h} – {s.a}
+          </span>
+          {Number.isFinite(s.ph) && <span className="mt-0.5 text-[10px] text-amber-200">pens {s.ph}–{s.pa}</span>}
+        </span>
+      ) : canEdit ? (
+        <span className="shrink-0 rounded-lg bg-signal/15 px-2.5 py-1 text-[11px] font-bold text-signal ring-1 ring-signal/30">+ Result</span>
+      ) : (
+        <span className="shrink-0 px-2 text-xs text-mist-700">vs</span>
+      )}
       <span className={cn("min-w-0 flex-1 truncate text-sm", result === "a" && "font-bold", !away && "text-mist-500 italic")}>{away ? T.teamName(t, away) : awayLabel}</span>
-    </div>
+    </button>
   );
 }
 
-function Fixtures({ t, fixtures, editable, setScore, compact }) {
+function Fixtures({ t, fixtures, editable, onOpen, compact }) {
   const rounds = useMemo(() => {
     const map = new Map();
     for (const f of fixtures) map.set(f.round, [...(map.get(f.round) ?? []), f]);
@@ -499,85 +631,232 @@ function Fixtures({ t, fixtures, editable, setScore, compact }) {
   return (
     <div className={cn("space-y-2", !compact && "space-y-3")}>
       {rounds.map(([round, list]) => (
-        <div key={round} className="rounded-3xl bg-white/[.03] px-4 py-2 ring-1 ring-white/[.07]">
-          <p className="pt-1 font-mono text-[10px] tracking-[.18em] text-mist-500 uppercase">{compact ? `Matchday ${round}` : `Round ${round}`}</p>
-          <div className="divide-y divide-white/[.04]">
-            {list.map((f) => (
-              <MatchRow key={f.id} t={t} id={f.id} home={f.home} away={f.away} editable={editable} setScore={setScore} />
-            ))}
-          </div>
+        <div key={round} className="rounded-3xl bg-white/[.03] px-2 py-2 ring-1 ring-white/[.07]">
+          <p className="px-2 pt-1 font-mono text-[10px] tracking-[.18em] text-mist-500 uppercase">{compact ? `Matchday ${round}` : `Round ${round}`}</p>
+          {list.map((f) => (
+            <MatchButton key={f.id} t={t} id={f.id} home={f.home} away={f.away} editable={editable} onOpen={onOpen} />
+          ))}
         </div>
       ))}
     </div>
   );
 }
 
-function TieCard({ t, tie, memo, editable, setScore, title }) {
+/* ---------- knockouts ---------- */
+
+function nextStep(t, tie) {
+  if (t.ko.third?.id === tie.id) return "Winner finishes third";
+  const rounds = t.ko.rounds;
+  const r = rounds.findIndex((x) => x.ties.some((y) => y.id === tie.id));
+  if (r === rounds.length - 1) return "Winner is the champion";
+  return `Winner goes to the ${rounds[r + 1].name === "Final" ? "Final" : rounds[r + 1].name}`;
+}
+
+function TieCard({ t, tie, memo, editable, onOpen, title }) {
   const r = T.resolveTie(t, tie, memo);
-  const last = r.legs.at(-1);
-  const pens = last && t.scores[last.id];
   return (
-    <div className="w-72 shrink-0 rounded-3xl bg-white/[.03] p-3 ring-1 ring-white/[.07]">
-      <div className="flex items-center justify-between px-1">
+    <div className="w-72 shrink-0 rounded-3xl bg-white/[.03] p-2 ring-1 ring-white/[.07]">
+      <div className="flex items-center justify-between px-2 pt-1">
         <p className="font-mono text-[10px] tracking-[.18em] text-mist-500 uppercase">{title}</p>
-        {r.winner && !r.bye && <span className="text-[11px] font-semibold text-signal">{T.teamName(t, r.winner)} through</span>}
+        {r.winner && !r.bye && <span className="text-[11px] font-semibold text-signal">✓ {T.teamName(t, r.winner)}</span>}
       </div>
       {r.bye ? (
-        <p className="px-1 py-3 text-sm">
+        <p className="px-2 py-3 text-sm">
           <b>{r.a.bye ? r.b.label : r.a.label}</b> <span className="text-mist-500">gets a bye</span>
         </p>
       ) : (
         <>
-          {r.legs.map((leg) => (
+          {r.legs.map((leg, i) => (
             <div key={leg.id}>
-              {r.legs.length > 1 && <p className="mt-1 px-1 text-[10px] text-mist-500">Leg {leg.n}</p>}
-              <MatchRow t={t} id={leg.id} home={leg.home.id} away={leg.away.id} homeLabel={leg.home.label} awayLabel={leg.away.label} editable={editable} setScore={setScore} />
+              {r.legs.length > 1 && <p className="mt-1 px-2 text-[10px] text-mist-500">{i === 0 ? "First leg" : "Second leg"}</p>}
+              <MatchButton t={t} id={leg.id} home={leg.home.id} away={leg.away.id} homeLabel={leg.home.label} awayLabel={leg.away.label} editable={editable} onOpen={(m) => onOpen({ ...m, tie: tie.id })} />
             </div>
           ))}
           {r.legs.length > 1 && r.legs.every((l) => T.played(t.scores[l.id])) && (
-            <p className="px-1 text-xs text-mist-500">
-              Aggregate {T.teamName(t, r.a.id)} {r.aggA}–{r.aggB} {T.teamName(t, r.b.id)}
+            <p className="px-2 text-xs text-mist-500">
+              On aggregate {T.teamName(t, r.a.id)} {r.aggA}–{r.aggB} {T.teamName(t, r.b.id)}
             </p>
           )}
-          {r.needsPens && (
-            <div className="mt-1 flex items-center gap-2 rounded-2xl bg-amber-400/10 px-2 py-1.5 ring-1 ring-amber-300/30">
-              <span className="flex-1 text-right text-xs font-semibold text-amber-200">Penalties</span>
-              <ScoreBox editable={editable} value={pens?.ph} onChange={(v) => setScore(last.id, { ph: v })} label="Home penalties" />
-              <span className="text-mist-700">:</span>
-              <ScoreBox editable={editable} value={pens?.pa} onChange={(v) => setScore(last.id, { pa: v })} label="Away penalties" />
-              <span className="flex-1" />
-            </div>
-          )}
+          {r.needsPens && !r.winner && <p className="px-2 pt-1 text-xs font-semibold text-amber-200">Level: tap the {r.legs.length > 1 ? "second leg" : "match"} to add the penalty shoot-out.</p>}
+          <p className="px-2 pt-1 pb-1 text-[11px] text-mist-500">{nextStep(t, tie)}</p>
         </>
       )}
     </div>
   );
 }
 
-function Bracket({ t, editable, setScore }) {
+function Bracket({ t, editable, onOpen }) {
   const memo = new Map();
   if (!t.ko) return null;
+  const waiting = t.groups && !t.groups.every((_, gi) => T.qualifiers(t, gi));
   return (
     <div>
-      {t.format !== "cup" && !T.groupsDone(t) && <p className="mb-3 rounded-2xl bg-white/[.04] px-4 py-2.5 text-xs text-mist-500">The knockout teams appear once every group match has a score.</p>}
+      {waiting && <p className="mb-3 rounded-2xl bg-white/[.04] px-4 py-2.5 text-xs text-mist-500">Teams appear here as soon as their group is finished (or the organiser picks who goes through).</p>}
       <div className="-mx-4 overflow-x-auto px-4 pb-3">
         <div className="flex w-max gap-4">
           {t.ko.rounds.map((round) => (
             <div key={round.name} className="flex flex-col justify-around gap-3">
               <p className="font-display text-[15px] font-bold">{round.name}</p>
               {round.ties.map((tie, i) => (
-                <TieCard key={tie.id} t={t} tie={tie} memo={memo} editable={editable} setScore={setScore} title={round.ties.length === 1 ? round.name : `${round.name.replace("-finals", "-final").replace("Round of", "R")} ${i + 1}`} />
+                <TieCard key={tie.id} t={t} tie={tie} memo={memo} editable={editable} onOpen={onOpen} title={round.ties.length === 1 ? round.name : `${round.name.replace("-finals", "-final").replace("Round of", "R")} ${i + 1}`} />
               ))}
             </div>
           ))}
           {t.ko.third && (
             <div className="flex flex-col justify-end gap-3">
               <p className="font-display text-[15px] font-bold">Third place</p>
-              <TieCard t={t} tie={t.ko.third} memo={memo} editable={editable} setScore={setScore} title="Third-place match" />
+              <TieCard t={t} tie={t.ko.third} memo={memo} editable={editable} onOpen={onOpen} title="Third-place match" />
             </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---------- entering a result ---------- */
+
+function Stepper({ value, onChange, label }) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button type="button" onClick={() => onChange(Math.min(99, value + 1))} aria-label={`${label} plus one`} className="grid size-11 place-items-center rounded-2xl bg-white/[.07] text-xl font-bold ring-1 ring-white/10 transition active:scale-95">
+        +
+      </button>
+      <input
+        value={value}
+        inputMode="numeric"
+        aria-label={label}
+        onChange={(e) => onChange(Math.min(99, Number(e.target.value.replace(/\D/g, "").slice(0, 2)) || 0))}
+        className="h-16 w-20 rounded-2xl bg-white/[.05] text-center font-display text-4xl font-extrabold tabular-nums ring-1 ring-white/10 outline-none focus:ring-signal/60"
+      />
+      <button type="button" onClick={() => onChange(Math.max(0, value - 1))} aria-label={`${label} minus one`} className="grid size-11 place-items-center rounded-2xl bg-white/[.07] text-xl font-bold ring-1 ring-white/10 transition active:scale-95">
+        −
+      </button>
+    </div>
+  );
+}
+
+function ResultSheet({ t, match, onClose, onSave }) {
+  const existing = t.scores[match.id];
+  const [h, setH] = useState(existing?.h ?? 0);
+  const [a, setA] = useState(existing?.a ?? 0);
+  const [ph, setPh] = useState(existing?.ph ?? 0);
+  const [pa, setPa] = useState(existing?.pa ?? 0);
+  const openedAt = useRef(Date.now());
+
+  // In a knockout, a level result on the deciding match needs a penalty shoot-out.
+  const tie = match.tie ? T.findTie(t, match.tie) : null;
+  let needsPens = false;
+  if (tie) {
+    const legs = T.tieLegs(tie);
+    const deciding = legs.at(-1) === match.id;
+    if (deciding) {
+      const trial = { ...t, scores: { ...t.scores, [match.id]: { h, a } } };
+      const r = T.resolveTie(trial, tie);
+      needsPens = r.needsPens;
+    }
+  }
+  const pensOk = !needsPens || ph !== pa;
+  const homeName = T.teamName(t, match.home);
+  const awayName = T.teamName(t, match.away);
+
+  function save() {
+    if (!pensOk) return;
+    onSave(needsPens ? { h, a, ph, pa } : { h, a });
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] grid place-items-end bg-black/60 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:place-items-center" onClick={() => Date.now() - openedAt.current > 400 && onClose()}>
+      <motion.div initial={{ y: 30 }} animate={{ y: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-[28px] bg-ink-900 p-5 ring-1 ring-white/10">
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-lg font-bold">{existing ? "Change result" : "Add result"}</h3>
+          <button onClick={onClose} aria-label="Close" className="grid size-8 place-items-center rounded-full bg-white/[.06]">
+            <X className="size-4" />
+          </button>
+        </div>
+        {tie && <p className="mt-0.5 text-xs text-mist-500">{T.tieTitle(t, tie.id)}{T.tieLegs(tie).length > 1 ? (T.tieLegs(tie)[0] === match.id ? " · first leg" : " · second leg") : ""}</p>}
+
+        <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <p className="line-clamp-2 min-h-10 text-sm font-semibold">{homeName}</p>
+            <Stepper value={h} onChange={setH} label={`${homeName} goals`} />
+          </div>
+          <span className="pt-10 font-display text-2xl text-mist-500">:</span>
+          <div className="flex flex-col items-center gap-2 text-center">
+            <p className="line-clamp-2 min-h-10 text-sm font-semibold">{awayName}</p>
+            <Stepper value={a} onChange={setA} label={`${awayName} goals`} />
+          </div>
+        </div>
+
+        {needsPens && (
+          <div className="mt-5 rounded-2xl bg-amber-400/10 p-3 ring-1 ring-amber-300/30">
+            <p className="text-center text-sm font-semibold text-amber-200">It's level, so it went to penalties</p>
+            <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <div className="flex justify-center"><Stepper value={ph} onChange={setPh} label={`${homeName} penalties`} /></div>
+              <span className="font-display text-xl text-mist-500">:</span>
+              <div className="flex justify-center"><Stepper value={pa} onChange={setPa} label={`${awayName} penalties`} /></div>
+            </div>
+            {!pensOk && <p className="mt-2 text-center text-xs text-amber-200">A shoot-out needs a winner.</p>}
+          </div>
+        )}
+
+        <div className="mt-5 flex gap-2">
+          <Button className="flex-1" size="lg" onClick={save} disabled={!pensOk}>
+            Save result
+          </Button>
+          {existing && (
+            <Button variant="ghost" size="lg" onClick={() => onSave(null)}>
+              Clear
+            </Button>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ---------- choosing who goes through ---------- */
+
+function QualifierSheet({ t, gi, onClose, onSave }) {
+  const rows = T.groupTable(t, gi);
+  const current = T.qualifiers(t, gi)?.ids ?? [rows[0]?.id, rows[1]?.id];
+  const [first, setFirst] = useState(current[0]);
+  const [second, setSecond] = useState(current[1]);
+  const openedAt = useRef(Date.now());
+  const manual = Boolean(t.qualifiers?.[gi]);
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] grid place-items-end bg-black/60 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:place-items-center" onClick={() => Date.now() - openedAt.current > 400 && onClose()}>
+      <motion.div initial={{ y: 30 }} animate={{ y: 0 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-[28px] bg-ink-900 p-5 ring-1 ring-white/10">
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-lg font-bold">Group {T.groupLetter(gi)}: who goes through?</h3>
+          <button onClick={onClose} aria-label="Close" className="grid size-8 place-items-center rounded-full bg-white/[.06]">
+            <X className="size-4" />
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-mist-500">Normally the top two of the table go through by themselves. Pick them here if two teams are level and you decided another way, or the group can't be finished.</p>
+        {[["Group winner", first, setFirst, second], ["Runner-up", second, setSecond, first]].map(([label, value, set, other]) => (
+          <div key={label} className="mt-4">
+            <p className="text-xs font-semibold text-mist-300">{label}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {rows.map((r) => (
+                <button key={r.id} disabled={r.id === other} onClick={() => set(r.id)} className={cn("rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition disabled:opacity-30", value === r.id ? "bg-signal text-ink-950 ring-signal" : "bg-white/[.04] text-mist-300 ring-white/10")}>
+                  {r.name} <span className="font-mono text-[10px] opacity-70">{r.pts}pts</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="mt-5 flex gap-2">
+          <Button className="flex-1" onClick={() => onSave([first, second])} disabled={!first || !second || first === second}>
+            Send them through
+          </Button>
+          {manual && (
+            <Button variant="ghost" onClick={() => onSave(null)}>
+              Use the table
+            </Button>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
