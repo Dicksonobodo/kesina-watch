@@ -8,6 +8,7 @@ import { footlePlayers, giveUpFootle, guessFootle, startFootle } from "./_lib/ga
 import { careerNames, getGrid, guessGrid } from "./_lib/games/clubgames.js";
 import { blockPerson, editMessage, openChat, reactTo, reportPerson, searchPeople, sendMessage, syncChat, syncDirectory, unsendMessage } from "./_lib/games/chat.js";
 import { createGame, getGame, moveGame, rematch as rematchGame } from "./_lib/games/cgames.js";
+import { deleteCreation, getCreation, listCreations, saveCreation } from "./_lib/games/creations.js";
 import { addFeatured, listFeatured, removeFeatured } from "./_lib/games/featured.js";
 import { finishKeepy, startKeepy } from "./_lib/games/keepy.js";
 import { answerRoom, cancelRoom, createRoom, friendsRanking, getRoom, joinRoom, quickMatch, rematch, tickRoom } from "./_lib/games/battle.js";
@@ -25,7 +26,7 @@ import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
  */
 
 // Calls that don't count as "playing today" for the admin numbers.
-const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending", "career.names", "footle.players", "grid.get", "chat.sync", "chat.search", "chat.open", "cg.get", "live.featured"]);
+const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending", "career.names", "footle.players", "grid.get", "chat.sync", "chat.search", "chat.open", "cg.get", "live.featured", "create.list", "create.get"]);
 
 const ACTIONS = {
   /* who am I (no database access: used by the sidebar to show the Admin link) */
@@ -105,6 +106,12 @@ const ACTIONS = {
   "live.featured": () => listFeatured(),
   "live.feature.add": (who, b) => addFeatured(who, b),
   "live.feature.remove": (who, b) => removeFeatured(who, b.id),
+
+  /* tournaments and line-ups people make for their own games */
+  "create.list": (who, b) => listCreations(who, String(b.kind ?? "")),
+  "create.get": (who, b) => getCreation(who, b.id),
+  "create.save": (who, b) => saveCreation(who, b),
+  "create.delete": (who, b) => deleteCreation(who, b.id),
 
   /* keepie-uppie */
   "keepy.start": (who) => startKeepy(who),

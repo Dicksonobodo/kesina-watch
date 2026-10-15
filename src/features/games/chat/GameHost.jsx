@@ -9,6 +9,7 @@ import { useGames } from "../GamesProvider";
 import { RewardCard } from "../ui";
 import { useChat } from "./ChatProvider";
 import { CHAT_GAMES } from "./gameInfo";
+import { useScrollLock } from "./useScrollLock";
 
 const WordSwipe = lazy(() => import("./WordSwipe"));
 const Whot = lazy(() => import("./Whot"));
@@ -24,6 +25,7 @@ const SCREENS = { swipe: WordSwipe, whot: Whot, darts: Darts };
 export function GameHost() {
   const { gameId, setGameId, openPanel, backToChat, peer } = useChat();
   const { rewarded } = useGames();
+  useScrollLock(Boolean(gameId));
   const [game, setGame] = useState(null);
   const [reward, setReward] = useState(null);
   const [error, setError] = useState("");

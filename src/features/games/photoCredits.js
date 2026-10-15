@@ -1,5 +1,7 @@
 // Photographers behind the pictures in public/games/ and public/home/ (Unsplash License: free to use, credit is optional but kind).
 export const PHOTO_CREDITS = {
+  tourney: { photographer: "sammy swae", profile: "https://unsplash.com/@sammyswae", page: "https://unsplash.com/photos/soccer-team-celebrating-championship-victory-cneBYhGBUtM" },
+  lineup: { photographer: "Manuel Navarro", profile: "https://unsplash.com/@momentista", page: "https://unsplash.com/photos/soccer-player-during-daytime-V4G9k-ev8q0" },
   hilo: { photographer: "Homer Lopez", profile: "https://unsplash.com/@homerlopez", page: "https://unsplash.com/photos/man-wearing-black-polo-shirt-holding-led-signage---7zuwOPAFQ" },
   footle: { photographer: "Bertrand Gabioud", profile: "https://unsplash.com/@bergab", page: "https://unsplash.com/photos/grayscale-photo-of-person-wearing-hamsik-17-jersey-WHSXpNZj_8w" },
   grid: { photographer: "Victor", profile: "https://unsplash.com/@victor_g", page: "https://unsplash.com/photos/empty-football-field-in-aerial-photgraphy-raesgfwU7iM" },

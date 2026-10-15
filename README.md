@@ -78,6 +78,12 @@ Quizzes, predictions and head-to-head battles with XP, levels, daily streaks, co
 - **Keepie-Uppie:** a skill game with no questions (a canvas game in the browser). The server times the run and only accepts scores that were possible in that time.
 - **Daily chest:** the first game each day also opens a chest with random bonus coins and XP (a jackpot now and then).
 
+### Create: tournaments and line-ups for real-life games
+
+- **Tournament creator** (`/games/tournaments`): League (once or home and away), Champions League style (groups home and away, two-legged knockouts, one-off final), World Cup style (one-off groups and knockouts, third-place match) or Knockout cup (byes added when needed). Register the team names (one by one or paste a list); groups and fixtures are drawn at random. Type in scores and the tables (points, goal difference, goals, head-to-head), qualifiers, aggregates, penalties and bracket update themselves. Share the link: friends can follow, only the owner can enter scores.
+- **Line-up creator** (`/games/lineups`): 14 formations, names and shirt numbers on the pitch, drag anyone anywhere for a custom shape, subs, kit colours, save, share the link, or download a PNG.
+- The maths runs in the browser (`src/features/create/tourney.js`); the server stores each item in `creations/<id>` and only lets the owner change or delete it (`create.*` actions in `/api/games`).
+
 ### Chat (Game Zone only)
 
 A message button (bottom right on every Game Zone page) opens an iMessage-style chat. On a phone it is a bottom sheet over about 60% of the screen, so you can chat while a football game is still visible behind it; on desktop it floats in the corner.
@@ -122,6 +128,8 @@ The pictures on the home screen, the game cards and the sign-in page are real ph
 | Club Grid | `public/games/grid.webp` | [Victor](https://unsplash.com/photos/empty-football-field-in-aerial-photgraphy-raesgfwU7iM) |
 | Career Path | `public/games/career.webp` | [David Jones](https://unsplash.com/photos/a-person-in-a-yellow-jacket-standing-in-a-tunnel-tyT6J-ifCmQ) |
 | Keepie-Uppie | `public/games/keepy.webp` | [Ruben Leija](https://unsplash.com/photos/man-juggling-ball-on-grass-field-jY_knL-TVvA) |
+| Tournament creator | `public/games/tourney.webp` | [sammy swae](https://unsplash.com/photos/soccer-team-celebrating-championship-victory-cneBYhGBUtM) |
+| Line-up creator | `public/games/lineup.webp` | [Manuel Navarro](https://unsplash.com/photos/soccer-player-during-daytime-V4G9k-ev8q0) |
 | Football IQ Quiz | `public/games/quiz.webp` | [Emily Morter](https://unsplash.com/photos/question-mark-light-in-graffiti-tunnel-8xAA0f9yQnE) |
 | Head-to-Head | `public/games/battle.webp` | [Tobias Flyckt](https://unsplash.com/photos/woman-in-black-and-white-soccer-jersey-kicking-soccer-ball-on-green-field-during-daytime-5yNJx9NO3Yc) |
 | Guess the Player | `public/games/guess.webp` | [Keyur Tandel](https://unsplash.com/photos/a-man-playing-soccer-on-the-beach-at-sunset-NBgX8uetgWs) |

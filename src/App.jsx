@@ -27,6 +27,10 @@ const HigherLower = page(() => import("@/features/games/HigherLower"), "HigherLo
 const Footle = page(() => import("@/features/games/Footle"), "Footle");
 const ClubGrid = page(() => import("@/features/games/ClubGrid"), "ClubGrid");
 const Keepy = page(() => import("@/features/games/Keepy"), "Keepy");
+const Tournaments = page(() => import("@/features/create/Tournaments"), "Tournaments");
+const TournamentView = page(() => import("@/features/create/Tournaments"), "TournamentView");
+const Lineups = page(() => import("@/features/create/Lineups"), "Lineups");
+const LineupEditor = page(() => import("@/features/create/Lineups"), "LineupEditor");
 const Predictor = page(() => import("@/features/games/Predictor"), "Predictor");
 const BattleLobby = page(() => import("@/features/games/Battle"), "BattleLobby");
 const BattleRoom = page(() => import("@/features/games/Battle"), "BattleRoom");
@@ -67,6 +71,10 @@ export default function App() {
                           <Route path="footle" element={<Footle />} />
                           <Route path="grid" element={<ClubGrid />} />
                           <Route path="keepy" element={<Keepy />} />
+                          <Route path="tournaments" element={<Tournaments />} />
+                          <Route path="tournaments/:id" element={<TournamentView />} />
+                          <Route path="lineups" element={<Lineups />} />
+                          <Route path="lineups/:id" element={<LineupEditor />} />
                           <Route path="predictor" element={<Predictor />} />
                           <Route path="battle" element={<BattleLobby />} />
                           <Route path="battle/:code" element={<BattleRoom />} />

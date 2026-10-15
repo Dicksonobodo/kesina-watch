@@ -333,6 +333,36 @@ const ARTS = {
       </>
     ),
   },
+  tourney: {
+    bg: "from-amber-800 via-yellow-950 to-ink-950",
+    svg: (
+      <>
+        <g fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="3">
+          <path d="M40 30h40v30h30M40 90h40v-30M40 110h40v30h30M40 170h40v-30" />
+          <path d="M110 60v80M110 100h40" />
+          <path d="M280 30h-40v30h-30M280 90h-40v-30M280 110h-40v30h-30M280 170h-40v-30" />
+          <path d="M210 60v80M210 100h-40" />
+        </g>
+        <path d="M145 40h30v18a15 15 0 0 1-30 0z" fill={SIGNAL} />
+        <path d="M145 46h-9a9 9 0 0 0 9 12M175 46h9a9 9 0 0 1-9 12" fill="none" stroke={SIGNAL} strokeWidth="3" />
+        <rect x="155" y="72" width="10" height="10" fill={SIGNAL} />
+        <rect x="147" y="82" width="26" height="6" rx="2" fill={SIGNAL} />
+      </>
+    ),
+  },
+
+  lineup: {
+    bg: "from-emerald-800 via-green-950 to-ink-950",
+    svg: (
+      <>
+        <PitchLines opacity={0.25} />
+        {[[40, 80], [80, 40], [80, 120], [80, 65], [80, 95], [140, 50], [140, 80], [140, 110], [210, 45], [210, 115], [250, 80]].map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r="9" fill={i === 0 ? "#f59e0b" : SIGNAL} stroke="#fff" strokeWidth="2" />
+        ))}
+        <path d="M210 115 Q240 140 262 108" fill="none" stroke="#fff" strokeWidth="2" strokeDasharray="4 4" />
+      </>
+    ),
+  },
 };
 
 /** fit only matters for the drawn fallback: "slice" fills the box, "meet" shows all of it centred. */

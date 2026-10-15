@@ -7,6 +7,7 @@ import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
 import { useChat } from "./ChatProvider";
 import { CHAT_GAMES, gameCardLine } from "./gameInfo";
+import { useScrollLock } from "./useScrollLock";
 import { cardOf as whotCardOf, WhotCard } from "./Whot";
 
 /*
@@ -67,6 +68,7 @@ export function ChatLauncher() {
 
 export function ChatPanel() {
   const { open, view, closePanel, gameId } = useChat();
+  useScrollLock(open && !gameId); // full screen on phones: only the messages scroll
   return (
     <AnimatePresence>
       {open && !gameId && (
@@ -76,13 +78,11 @@ export function ChatPanel() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 60, opacity: 0 }}
           transition={{ type: "spring", stiffness: 340, damping: 32 }}
-          className="fixed inset-x-0 bottom-0 z-[110] flex h-[64dvh] flex-col overflow-hidden rounded-t-[28px] bg-ink-900 pb-[env(safe-area-inset-bottom)] shadow-2xl ring-1 shadow-black/70 ring-white/10 lg:inset-x-auto lg:right-6 lg:bottom-6 lg:h-[620px] lg:w-[400px] lg:rounded-3xl lg:pb-0"
+          className="fixed inset-0 z-[110] flex h-[100dvh] flex-col overflow-hidden bg-ink-900 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-black/70 lg:inset-auto lg:right-6 lg:bottom-6 lg:h-[620px] lg:w-[400px] lg:rounded-3xl lg:pt-0 lg:pb-0 lg:ring-1 lg:ring-white/10"
           role="dialog"
           aria-label="Messages"
         >
-          <button onClick={closePanel} aria-label="Hide messages" className="mx-auto mt-1.5 flex h-4 w-16 items-center justify-center lg:hidden">
-            <span className="h-1 w-10 rounded-full bg-white/20" />
-          </button>
+          <span className="block h-2 lg:h-1.5" />
           {view === "list" ? <ChatList /> : <Thread />}
         </motion.div>
       )}

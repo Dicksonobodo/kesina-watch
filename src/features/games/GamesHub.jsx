@@ -102,8 +102,25 @@ export function GamesHub() {
         </Link>
       </div>
 
+      {/* Create: tools for real-life games */}
+      <div className="mt-5 grid grid-cols-2 gap-2.5 sm:mt-8 sm:gap-3">
+        {[
+          { id: "tourney", to: "/games/tournaments", title: "Tournament creator", desc: "League, UCL or World Cup style, or a cup for your own games." },
+          { id: "lineup", to: "/games/lineups", title: "Line-up creator", desc: "Formations, your players, drag to make your own shape." },
+        ].map((c) => (
+          <Link key={c.id} to={c.to} className="group relative flex h-full flex-col overflow-hidden rounded-3xl bg-white/[.025] ring-1 ring-white/[.06] transition hover:-translate-y-0.5 hover:ring-signal/40">
+            <GameArt id={c.id} className="h-20 transition duration-500 group-hover:scale-[1.03] sm:h-28" />
+            <span className="absolute top-2 right-2 rounded-full bg-black/55 px-2 py-0.5 font-mono text-[9px] tracking-wider text-mist-100 uppercase backdrop-blur sm:top-3 sm:right-3 sm:text-[10px]">Create</span>
+            <span className="flex flex-1 flex-col p-3 sm:p-5">
+              <span className="font-display text-[15px] leading-tight font-bold tracking-tight sm:text-lg">{c.title}</span>
+              <span className="mt-1 line-clamp-2 text-xs leading-snug text-mist-500 sm:text-sm">{c.desc}</span>
+            </span>
+          </Link>
+        ))}
+      </div>
+
       {/* Search */}
-      <div className="mt-5 flex h-11 items-center gap-3 sm:mt-8 sm:h-12 rounded-full bg-white/[.05] px-4 ring-1 ring-white/10 focus-within:ring-signal/50">
+      <div className="mt-5 flex h-11 items-center gap-3 sm:mt-6 sm:h-12 rounded-full bg-white/[.05] px-4 ring-1 ring-white/10 focus-within:ring-signal/50">
         <Search className="size-[18px] shrink-0 text-mist-500" />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search games" aria-label="Search games" className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-mist-700" />
         {query && (
