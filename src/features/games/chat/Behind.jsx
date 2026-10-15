@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { PlayerBadge } from "@/features/sports/Sheets";
 import { NamePicker } from "../NamePicker";
 import { Banner } from "./GameHost";
+import { saveSeen, seenCount } from "./RoundDone";
 
 /*
  * Who's Behind You? One person plays at a time: the picker chooses a footballer, the guesser asks
@@ -64,7 +65,9 @@ export default function Behind({ game, move, busy, error }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [reveal, setReveal] = useState(null);
-  const seenTurns = useRef(game.turns.length);
+  // Turns already shown on this device; a turn that ended while you were away is shown when you come back.
+  const seenKey = `dw-behind-seen-${game.id}`;
+  const seenTurns = useRef(seenCount(seenKey, Math.max(0, game.turns.length - 1)));
   const logEnd = useRef(null);
 
   const items = useMemo(() => (players ?? []).map((p) => ({ key: p.id, name: p.name, sub: p.team })), [players]);
@@ -75,8 +78,9 @@ export default function Behind({ game, move, busy, error }) {
 
   // a turn just finished: show who it was
   useEffect(() => {
-    if (game.turns.length > seenTurns.current) setReveal(game.turns.at(-1));
+    if (game.turns.length > seenTurns.current) setReveal({ ...game.turns.at(-1), n: game.turns.length });
     seenTurns.current = game.turns.length;
+    saveSeen(seenKey, game.turns.length);
   }, [game.turns.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (body) => {
@@ -337,6 +341,19 @@ export default function Behind({ game, move, busy, error }) {
               </div>
               <p className="mt-3 font-display text-xl font-bold">{reveal.card?.name}</p>
               <p className="text-sm text-white/60">{reveal.card?.team}</p>
+              {/* both have guessed in this round: say the round is done, the score, and what's next */}
+              {reveal.n % 2 === 0 && (
+                <div className="mt-4 rounded-2xl bg-white/[.06] px-3 py-3 ring-1 ring-white/10">
+                  <p className="font-mono text-[10px] tracking-[.2em] text-white/55 uppercase">Round {reveal.round} of {game.rounds}</p>
+                  <p className="mt-0.5 font-display text-2xl font-black italic">Round {reveal.round} done</p>
+                  <p className="mt-1 font-display text-lg font-extrabold tabular-nums">
+                    <span className="text-signal">You {myScore}</span> <span className="text-white/40">–</span> {theirScore} {opp.name}
+                  </p>
+                  <p className="mt-2 text-[11px] font-bold tracking-wider text-signal uppercase">
+                    {game.status === "done" ? "That was the last round" : `Next · Round ${reveal.round + 1} of ${game.rounds}${reveal.round + 1 === game.rounds ? " (last round)" : ""}`}
+                  </p>
+                </div>
+              )}
               <Button className="mt-5 w-full" onClick={() => setReveal(null)}>
                 {game.status === "done" ? "See the result" : reveal.guesser === me ? `Now pick for ${opp.name}` : "Your turn to guess next"}
               </Button>

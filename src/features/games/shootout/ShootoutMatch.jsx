@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/cn";
-import { kickInfo, REGULATION } from "./geometry";
+import { DISTANCE_NAMES, kickInfo, REGULATION } from "./geometry";
 import { kitsFor, PenaltyScene } from "./PenaltyScene";
 
 /*
@@ -47,6 +47,13 @@ export function ShootoutMatch({ view, onShoot, onDive, seenKey, final, className
   const [choice, setChoice] = useState(null);
   const [problem, setProblem] = useState("");
   const [attempt, setAttempt] = useState(0);
+  // "Round 1" at kick-off, "Round 1 done" (and what's next) when both have kicked.
+  const [banner, setBanner] = useState(() => (kicks.length === 0 && status === "playing" ? { start: true, round: 0 } : null));
+  useEffect(() => {
+    if (!banner) return;
+    const t = setTimeout(() => setBanner(null), banner.start ? 1900 : 2600);
+    return () => clearTimeout(t);
+  }, [banner]);
   const now = useTicker(Boolean(view.clock));
 
   const replay = kicks.length > shown ? kicks[kicks.length - 1] : null;
@@ -54,6 +61,7 @@ export function ShootoutMatch({ view, onShoot, onDive, seenKey, final, className
     const n = replay ? replay.i + 1 : shown;
     setShown(n);
     setChoice(null);
+    if (replay && replay.i % 2 === 1 && status === "playing") setBanner({ start: false, round: replay.round });
     if (seenKey) {
       try {
         localStorage.setItem(seenKey, String(n));
@@ -92,7 +100,10 @@ export function ShootoutMatch({ view, onShoot, onDive, seenKey, final, className
   const waitingForClock = view.clock && now < view.clock.startsAt;
   let script;
   let kick;
-  if (replay) {
+  if (banner && !replay) {
+    script = { type: "idle" };
+    kick = view.next ?? kickInfo(order, kicks.length);
+  } else if (replay) {
     script = { type: "replay", kick: replay, from: myShots.has(replay.i) ? "strike" : "runup", onDone: finishReplay };
     kick = replay;
   } else if (status !== "playing") {
@@ -115,7 +126,7 @@ export function ShootoutMatch({ view, onShoot, onDive, seenKey, final, className
   const clockLeft = view.clock && !waitingForClock && status === "playing" ? Math.max(0, Math.ceil((view.clock.endsAt - now) / 1000)) : null;
 
   let info = null;
-  if (!replay && status === "playing") {
+  if (!replay && !banner && status === "playing") {
     if (waitingForClock) info = kicks.length ? "Next kick coming up…" : `Kick-off in ${Math.max(1, Math.ceil((view.clock.startsAt - now) / 1000))}…`;
     else if (view.action === "dive" && choice) info = `Diving ${SIDE[choice]}…`;
     else if (view.locked === "shot") info = `Shot struck. Waiting for ${oppName} to pick a side…`;
@@ -150,6 +161,7 @@ export function ShootoutMatch({ view, onShoot, onDive, seenKey, final, className
             <span className="rounded-full bg-live/90 px-3 py-1.5 text-xs font-semibold text-white">{problem}</span>
           </div>
         )}
+        <AnimatePresence>{banner && !replay && status === "playing" && <RoundBanner key={`${banner.start}${banner.round}`} banner={banner} view={view} kicks={visible} onSkip={() => setBanner(null)} />}</AnimatePresence>
         <AnimatePresence>
           {done && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-[3px]">
@@ -162,6 +174,65 @@ export function ShootoutMatch({ view, onShoot, onDive, seenKey, final, className
         </AnimatePresence>
       </PenaltyScene>
     </div>
+  );
+}
+
+/* ---------- between rounds ---------- */
+
+function RoundBanner({ banner, view, kicks, onSkip }) {
+  const { order, me } = view;
+  const next = kickInfo(order, banner.start ? 0 : (banner.round + 1) * 2);
+  const prevYards = banner.start ? null : kickInfo(order, banner.round * 2).yards;
+  const name = (uid) => (uid === me ? "You" : view.players.find((p) => p.uid === uid)?.name ?? "Them");
+  const goals = (uid) => kicks.filter((k) => k.shooter === uid && k.result === "goal").length;
+  let nextLine;
+  if (next.round === REGULATION) nextLine = { title: "Sudden death!", text: "Level after five each. Back to the spot: miss and they can win it." };
+  else if (next.sudden) nextLine = { title: `Sudden death · round ${next.round + 1}`, text: "Still level. One kick each again." };
+  else if (prevYards !== null && next.yards > prevYards) nextLine = { title: `Round ${next.round + 1}${next.round === REGULATION - 1 ? " · final round" : ""}`, text: `Moving back: ${DISTANCE_NAMES[next.yards].toLowerCase()}, ${next.yards} yards out. Harder to aim.` };
+  else nextLine = { title: `Round ${next.round + 1}${next.round === REGULATION - 1 ? " · final round" : ""}`, text: `${DISTANCE_NAMES[next.yards]} · ${next.yards} yards` };
+  const shooterFirst = next.shooter === me ? "You shoot first" : `${name(next.shooter)} shoots first`;
+  return (
+    <motion.button
+      type="button"
+      onClick={onSkip}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 z-[5] flex items-center justify-center bg-black/45 p-6 backdrop-blur-[2px]"
+      aria-label="Continue"
+    >
+      <motion.div initial={{ scale: 0.85, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 1.05, opacity: 0 }} transition={{ type: "spring", stiffness: 320, damping: 22 }} className="w-full max-w-xs rounded-3xl bg-black/75 p-5 text-center ring-1 ring-white/15">
+        {banner.start ? (
+          <>
+            <p className="font-mono text-[10px] tracking-[.24em] text-white/55 uppercase">Kick-off</p>
+            <p className="mt-1 font-display text-4xl font-black tracking-tight text-signal italic">Round 1</p>
+            <p className="mt-2 text-sm text-white/75">
+              {DISTANCE_NAMES[next.yards]} · {next.yards} yards · five rounds, then sudden death
+            </p>
+            <p className="mt-3 inline-block rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">{shooterFirst}</p>
+          </>
+        ) : (
+          <>
+            <p className="font-mono text-[10px] tracking-[.24em] text-white/55 uppercase">{banner.round >= REGULATION ? `Sudden death round ${banner.round + 1}` : `Round ${banner.round + 1} of ${REGULATION}`}</p>
+            <p className="mt-1 font-display text-3xl font-black tracking-tight italic">Round {banner.round + 1} done</p>
+            <div className="mt-3 flex items-center justify-center gap-3">
+              <span className={cn("max-w-[6rem] truncate text-sm font-bold", order[0] === me && "text-signal")}>{name(order[0])}</span>
+              <span className="font-display text-3xl font-black tabular-nums">
+                {goals(order[0])}
+                <span className="mx-1.5 text-white/35">–</span>
+                {goals(order[1])}
+              </span>
+              <span className={cn("max-w-[6rem] truncate text-sm font-bold", order[1] === me && "text-signal")}>{name(order[1])}</span>
+            </div>
+            <div className="mt-4 rounded-2xl bg-white/[.06] px-3 py-2.5 ring-1 ring-white/10">
+              <p className={cn("text-[11px] font-bold tracking-wider uppercase", next.round === REGULATION ? "text-live" : "text-signal")}>Next · {nextLine.title}</p>
+              <p className="mt-0.5 text-[13px] text-white/80">{nextLine.text}</p>
+            </div>
+          </>
+        )}
+        <p className="mt-3 text-[10px] text-white/40">Tap to continue</p>
+      </motion.div>
+    </motion.button>
   );
 }
 

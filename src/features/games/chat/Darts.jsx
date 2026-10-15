@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/cn";
 import { Banner, WaitingNote } from "./GameHost";
+import { RoundDone, saveSeen, seenCount } from "./RoundDone";
 
 /*
  * Darts, 301. No aiming marks: pick up the dart and flick it at the board. The direction of the
@@ -105,6 +106,29 @@ export default function Darts({ game, move, busy, error }) {
   const [notice, setNotice] = useState("");
   const samples = useRef([]);
 
+  // A round is one turn (three darts) each. When both have thrown, say so: "Round 2 done".
+  const visits = game.visits ?? game.history.length;
+  const seenKey = `dw-darts-seen-${game.id}`;
+  const seen = useRef(seenCount(seenKey, visits - (game.history.at(-1) && game.history.at(-1).by !== me ? 1 : 0)));
+  const [roundDone, setRoundDone] = useState(null);
+  const closeRound = useCallback(() => setRoundDone(null), []);
+  useEffect(() => {
+    if (visits <= seen.current) return;
+    seen.current = visits;
+    saveSeen(seenKey, visits);
+    if (visits % 2 !== 0 || game.status !== "playing") return;
+    const round = visits / 2;
+    const first = game.players[0].uid;
+    setRoundDone({
+      key: round,
+      eyebrow: "Darts · 301",
+      title: `Round ${round} done`,
+      score: [{ name: "You", value: game.left[me], me: true }, { name: opp.name, value: game.left[opp.uid] }],
+      scoreNote: "left to get to zero",
+      next: { title: `Round ${round + 1}`, text: first === me ? "You throw first" : `${opp.name} throws first` },
+    });
+  }, [visits]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // measure the board so board units can be turned into pixels
   useEffect(() => {
     const measure = () => {
@@ -196,7 +220,8 @@ export default function Darts({ game, move, busy, error }) {
         ))}
       </div>
 
-      <div className="mt-2 flex h-7 items-center gap-3">
+      <p className="mt-2 font-mono text-[10px] tracking-[.2em] text-white/50 uppercase">Round {Math.floor(visits / 2) + 1}</p>
+      <div className="flex h-7 items-center gap-3">
         {game.status === "playing" && myTurn && (
           <>
             <span className="text-sm font-bold text-signal">Your throw</span>
@@ -270,6 +295,7 @@ export default function Darts({ game, move, busy, error }) {
       {notice && <p className="text-sm font-semibold text-amber-300">{notice}</p>}
       {error && <p className="text-xs text-live">{error}</p>}
       <p className="mt-1 max-w-xs text-center text-[11px] text-white/40">301: take your score down to exactly zero. Go below zero and the turn is a bust.</p>
+      <RoundDone info={roundDone} onClose={closeRound} />
     </div>
   );
 }

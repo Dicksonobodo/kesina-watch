@@ -310,7 +310,8 @@ async function closeKick(store, id, k) {
   if (winner || forfeit) {
     Object.assign(update, { status: "done", finishedAt: Date.now(), forfeit: forfeit ?? null, winner: forfeit ? room.memberIds.find((u) => u !== forfeit) : winner, idx: k + 1 });
   } else {
-    Object.assign(update, { idx: k + 1, qStartedAt: Date.now() + SHOOTOUT.revealMs });
+    // A round just finished (both have kicked): a little longer, for the round banner.
+    Object.assign(update, { idx: k + 1, qStartedAt: Date.now() + SHOOTOUT.revealMs + (k % 2 === 1 ? 2400 : 0) });
   }
   if (!(await store.cas(`rooms/${id}`, { idx: k, status: "playing" }, update))) return store.get(`rooms/${id}`);
   const next = await store.get(`rooms/${id}`);

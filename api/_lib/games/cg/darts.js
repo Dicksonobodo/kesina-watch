@@ -70,7 +70,7 @@ export function create(players) {
 
 export function view(g) {
   const s = g.state;
-  return { left: s.left, thrown: s.thrown, dartsLeft: s.dartsLeft, history: s.history.slice(-12), log: s.log.slice(-6), start: START };
+  return { left: s.left, thrown: s.thrown, dartsLeft: s.dartsLeft, history: s.history.slice(-12), visits: s.history.length, log: s.log.slice(-6), start: START };
 }
 
 export function move(g, uid, body) {
