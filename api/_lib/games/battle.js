@@ -14,7 +14,7 @@ import { dayKey, GameError, rateLimit } from "./util.js";
  */
 
 // What can be played head to head (same builders as the solo games). "daily" is solo only.
-export const BATTLE_KINDS = ["quiz", "shirt", "clubs", "trophy", "xi"];
+export const BATTLE_KINDS = ["quiz", "shirt", "clubs", "trophy", "xi", "career", "hilo"];
 const COUNTDOWN_MS = 3500; // before the first question
 const REVEAL_MS = 3000; // pause between questions to show the answer
 const GRACE_MS = 2500;

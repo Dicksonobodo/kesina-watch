@@ -11,12 +11,29 @@ import { dayKey, GameError, plain, rateLimit, rngFrom, sample, shuffle } from ".
  *    column's club in every square.
  */
 
+// Career club names (careers.json) → the 16 grid clubs, so the two snapshots can back each other up.
+const CLUB_ALIASES = {
+  barcelona: "Q7156", "real madrid": "Q8682", "paris saint germain": "Q483020", "manchester united": "Q18656", "manchester city": "Q50602",
+  chelsea: "Q9616", arsenal: "Q9617", liverpool: "Q1130849", juventus: "Q1422", milan: "Q1543", "ac milan": "Q1543", "inter milan": "Q631",
+  internazionale: "Q631", "bayern munich": "Q15789", "borussia dortmund": "Q41420", "atletico madrid": "Q8701", "tottenham hotspur": "Q18741", ajax: "Q81888",
+};
+
 let data;
 const load = () => {
   if (!data) {
     const raw = JSON.parse(readFileSync(new URL("./bothclubs.json", import.meta.url), "utf8"));
+    // One entry per name. Different players can share a name (there are two famous Luis Suárezs):
+    // their clubs are combined, so an answer is accepted if either of them fits.
     const byName = new Map();
-    for (const p of raw.players) byName.set(plain(p.name), p);
+    const add = (name, clubIds, sl) => {
+      const key = plain(name);
+      const cur = byName.get(key) ?? { name, sl, clubs: [] };
+      cur.clubs = [...new Set([...cur.clubs, ...clubIds])];
+      cur.sl = Math.max(cur.sl ?? 0, sl ?? 0);
+      byName.set(key, cur);
+    };
+    for (const p of raw.players) add(p.name, p.clubs, p.sl);
+    for (const p of careers()) add(p.name, p.path.map((x) => CLUB_ALIASES[plain(x.c)]).filter(Boolean), p.sl);
     data = { clubs: raw.clubs, players: raw.players, byName };
   }
   return data;
@@ -57,6 +74,27 @@ export function careerClues(rng = Math.random) {
   return { name: p.name, team: p.path.at(-1).c, nationality: p.nat ?? "", position: p.pos ?? "", photo: null, clues };
 }
 
+/** Career path as quick-fire questions: the whole path is shown, pick the player from four. */
+export function careerQuestions(count, rng = Math.random) {
+  const pool = careers().filter((p) => p.path.length >= 3);
+  const picks = sample(pool, count, rng);
+  return picks.map((p) => {
+    // wrong answers: other famous players from around the same time
+    const near = pool.filter((x) => x.name !== p.name && Math.abs((x.born ?? 1990) - (p.born ?? 1990)) <= 6);
+    const wrong = sample(near.length >= 3 ? near : pool.filter((x) => x.name !== p.name), 3, rng).map((x) => x.name);
+    return {
+      id: `cp${plain(p.name).replace(/ /g, "")}`,
+      text: "Whose career is this?",
+      options: [p.name, ...wrong],
+      answer: 0,
+      category: "career-path",
+      difficulty: p.sl >= 120 ? "easy" : p.sl >= 80 ? "medium" : "hard",
+      source: "wikidata",
+      meta: { kind: "career", path: p.path },
+    };
+  });
+}
+
 /* ---------- club grid ---------- */
 
 const ROWS = 3;
@@ -64,7 +102,7 @@ const GUESSES = 12;
 
 const rarity = (sl) => (sl < 45 ? 100 : sl < 70 ? 70 : sl < 110 ? 40 : 20);
 
-function gridFor(day) {
+function buildGrid(day) {
   const { clubs, players } = load();
   const ids = Object.keys(clubs);
   const pool = players.filter((p) => p.sl >= 30);
@@ -79,11 +117,24 @@ function gridFor(day) {
   throw new Error("no grid");
 }
 
+/**
+ * Today's grid. It is saved the first time it is made, so later changes to the player data can
+ * never change a grid that people have already started.
+ */
+async function gridFor(day) {
+  const store = await getStore();
+  const saved = await store.get(`grid_days/${day}`).catch(() => null);
+  if (saved?.rows?.length === ROWS && saved?.cols?.length === ROWS) return saved;
+  const grid = buildGrid(day);
+  await store.set(`grid_days/${day}`, grid).catch(() => {});
+  return grid;
+}
+
 const cellKey = (r, c) => `${r},${c}`;
 const clubView = (id) => ({ id, name: load().clubs[id] });
 
-function gridView(day, state) {
-  const { rows, cols } = gridFor(day);
+async function gridView(day, state) {
+  const { rows, cols } = await gridFor(day);
   const cells = Object.fromEntries(Object.entries(state.cells ?? {}).map(([k, v]) => [k, { name: v.name, points: v.points }]));
   return {
     day,
@@ -117,7 +168,7 @@ export async function guessGrid(identity, cell, name) {
   if (state.cells[cell]) throw new GameError("That square is already filled.");
   const typed = plain(name);
   if (typed.length < 3) throw new GameError("Type a player's name.");
-  const { rows, cols } = gridFor(day);
+  const { rows, cols } = await gridFor(day);
   const { clubs, byName } = load();
   const p = byName.get(typed);
   if (!p) throw new GameError("I don't know that player. Pick a name from the suggestions.");
@@ -148,5 +199,5 @@ export async function guessGrid(identity, cell, name) {
     ]);
   }
   await store.set(path, state);
-  return { ...(result ?? { ok: true }), grid: gridView(day, state), reward };
+  return { ...(result ?? { ok: true }), grid: await gridView(day, state), reward };
 }

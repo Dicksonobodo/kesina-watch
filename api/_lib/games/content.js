@@ -4,7 +4,7 @@ import { getLeaders } from "../football.js";
 import { getPlayer } from "../football.js";
 import { getMatch } from "../match.js";
 import { TROPHY_QUESTIONS } from "./curated.js";
-import { plain, sample, shuffle } from "./util.js";
+import { GameError, plain, sample, shuffle } from "./util.js";
 
 /*
  * Question builders that need data beyond the text bank:
@@ -80,7 +80,8 @@ export const playerPool = () =>
         pool.push({ id: String(p.id), league, name: p.name, team: p.team });
       }
     }
-    if (pool.length < 10) throw new Error("player pool unavailable");
+    // The player data comes from ESPN; if it can't be reached, say so plainly (not "something went wrong").
+    if (pool.length < 10) throw new GameError("Player data isn't available right now. Try again in a minute.", 503);
     return { value: pool };
   });
 

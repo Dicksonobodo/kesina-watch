@@ -18,7 +18,6 @@ export const GAMES = [
   { id: "career", to: "/games/career", title: "Career Path", desc: "Clubs appear one by one. Name the player before the path ends.", icon: Route },
   { id: "predictor", to: "/games/predictor", title: "Match Predictor", desc: "Call the result before kickoff and compete with friends in a league.", icon: Target, tag: "Matchday" },
   { id: "quiz", to: "/games/quiz", title: "Football IQ Quiz", desc: "10 questions, 15 seconds each. Faster answers score more.", icon: Brain },
-  { id: "battle", to: "/games/battle", title: "Head-to-Head", desc: "Beat a friend or a player of your level in the same quiz.", icon: Swords, tag: "Multiplayer" },
   { id: "guess", to: "/games/guess", title: "Guess the Player", desc: "Clues appear one by one. The fewer you need, the more you win.", icon: UserSearch },
   { id: "shirt", to: "/games/shirt", title: "Guess the Shirt Number", desc: "Which number does this player wear?", icon: Shirt },
   { id: "clubs", to: "/games/clubs", title: "Who Played for Both?", desc: "Two clubs. One player has worn both shirts.", icon: Handshake },
@@ -59,10 +58,32 @@ export function GamesHub() {
         </div>
       </header>
 
+      {/* Head-to-Head: play against real people */}
+      <div className="relative mt-5 overflow-hidden rounded-3xl ring-1 ring-rose-400/30 sm:mt-8">
+        <GameArt id="battle" className="absolute inset-0 size-full opacity-60" />
+        <div className="absolute inset-0 bg-gradient-to-r from-ink-950 via-ink-950/85 to-ink-950/30" />
+        <div className="relative p-5 sm:p-7">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/20 px-2.5 py-1 font-mono text-[10px] font-bold tracking-wider text-rose-200 uppercase ring-1 ring-rose-400/40">
+            <span className="size-1.5 animate-pulse rounded-full bg-rose-400" /> Multiplayer
+          </span>
+          <h2 className="mt-3 font-display text-2xl leading-tight font-extrabold tracking-tight sm:text-3xl">Head-to-Head</h2>
+          <p className="mt-1.5 max-w-md text-sm text-mist-300">Play a friend or someone at your level: 7 football battles, plus Word Swipe, Naija Whot, Darts and Who's Behind You? in the chat.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link to="/games/battle" className="inline-flex h-11 items-center gap-2 rounded-full bg-signal px-5 text-sm font-bold text-ink-950 transition hover:brightness-110">
+              <Swords className="size-4" /> Start a battle
+            </Link>
+            <button onClick={chat.openPanel} className="inline-flex h-11 items-center gap-2 rounded-full bg-white/10 px-5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white/15">
+              <MessageCircle className="size-4 text-signal" /> Games in chat
+            </button>
+          </div>
+        </div>
+      </div>
+
+
       <ErrorNote>{error}</ErrorNote>
 
       {/* Player strip */}
-      <div className="mt-5 grid gap-2.5 sm:mt-8 sm:gap-3 lg:grid-cols-[1.4fr_1fr]">
+      <div className="mt-3 grid gap-2.5 sm:mt-4 sm:gap-3 lg:grid-cols-[1.4fr_1fr]">
         <div className="rounded-3xl bg-gradient-to-br from-signal/[.1] via-white/[.02] to-transparent p-4 ring-1 ring-signal/20 sm:p-6">
           {loading ? (
             <div className="grid place-items-center py-6">

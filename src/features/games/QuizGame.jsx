@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
-import { PlayerBadge } from "@/features/sports/Sheets";
+import { Crest, PlayerBadge } from "@/features/sports/Sheets";
 import { useGames } from "./GamesProvider";
 import { GameArt } from "./art";
 import { Card, ErrorNote, Eyebrow, OptionButton, RewardCard, TimeBar } from "./ui";
@@ -318,6 +318,31 @@ function Results({ summary, info, kind, onAgain, onBack }) {
 /** What goes above a question: the line-up (Complete the XI) or the player (shirt numbers). */
 export function QuestionMeta({ q, filled = {} }) {
   if (q.meta?.kind === "xi") return <LineupPitch xi={q.meta.xi} current={q.meta.slot} filled={filled} />;
+  if (q.meta?.kind === "career")
+    return (
+      <ol className="mb-4 rounded-2xl bg-white/[.03] p-3 ring-1 ring-white/[.06]">
+        {q.meta.path.map((s, k) => (
+          <li key={k} className="relative flex items-center gap-3 pb-2.5 last:pb-0">
+            {k < q.meta.path.length - 1 && <span className="absolute top-4 left-[6px] h-full w-px bg-signal/30" />}
+            <span className="relative size-[13px] shrink-0 rounded-full bg-signal ring-4 ring-signal/20" />
+            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{s.c}</span>
+            <span className="font-mono text-xs text-mist-500">{s.y}</span>
+          </li>
+        ))}
+      </ol>
+    );
+  if (q.meta?.kind === "versus")
+    return (
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        {[q.meta.a, q.meta.b].map((x) => (
+          <div key={x.id} className="flex flex-col items-center rounded-2xl bg-white/[.03] p-3 text-center ring-1 ring-white/[.06]">
+            {x.type === "team" ? <Crest src={x.logo} name={x.name} className="size-12" /> : <PlayerBadge name={x.name} team={x.sub} className="size-12 rounded-2xl text-sm" />}
+            <p className="mt-2 line-clamp-2 text-sm leading-tight font-bold">{x.name}</p>
+            <p className="text-[11px] text-mist-500">{x.sub}</p>
+          </div>
+        ))}
+      </div>
+    );
   if (q.meta?.kind === "player")
     return (
       <div className="mb-4 flex items-center gap-4">

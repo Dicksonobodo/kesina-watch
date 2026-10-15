@@ -145,3 +145,33 @@ export async function answerHilo(identity, id, choice) {
   ]);
   return { correct, done: true, revealed, streak: s.streak, best, record: s.streak > previous, cur: { ...show(s.cur), value: a }, next: { ...show(s.next), value: b }, metric: { key: s.metric, label: METRICS[s.metric].label }, reward };
 }
+
+/** Higher or Lower as quick-fire questions for battles: "Who has more …?" between two players or clubs. */
+export async function hiloQuestions(count) {
+  const items = await pool();
+  const out = [];
+  for (let tries = 0; out.length < count && tries < count * 20; tries++) {
+    const type = Math.random() < 0.7 ? "player" : "team";
+    const metrics = byType(type);
+    const metric = metrics[Math.floor(Math.random() * metrics.length)];
+    const list = items[type].filter((i) => Number.isFinite(valueOf(i, metric)));
+    const a = list[Math.floor(Math.random() * list.length)];
+    const b = list[Math.floor(Math.random() * list.length)];
+    if (!a || !b || a.id === b.id || valueOf(a, metric) === valueOf(b, metric)) continue;
+    if (out.some((q) => q.meta.a.id === a.id || q.meta.b.id === b.id)) continue;
+    const fewer = metric === "goalsAgainst"; // "more goals conceded" reads oddly: ask who conceded fewer
+    const winner = fewer ? (valueOf(a, metric) < valueOf(b, metric) ? a : b) : valueOf(a, metric) > valueOf(b, metric) ? a : b;
+    const loser = winner === a ? b : a;
+    out.push({
+      id: `hl${a.id}${b.id}${metric}`,
+      text: fewer ? "Which club has conceded fewer league goals?" : `Who has more ${METRICS[metric].label}?`,
+      options: [winner.name, loser.name],
+      answer: 0,
+      category: "higher-or-lower",
+      difficulty: Math.abs(valueOf(a, metric) - valueOf(b, metric)) <= 2 ? "hard" : "medium",
+      source: "espn",
+      meta: { kind: "versus", a: show(a), b: show(b), metric: METRICS[metric].label }, // no numbers: they would give the answer away
+    });
+  }
+  return out;
+}

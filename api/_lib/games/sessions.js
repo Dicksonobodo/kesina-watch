@@ -1,4 +1,6 @@
-import { buildQuiz } from "./questions.js";
+import { buildQuiz, shuffleQuestion } from "./questions.js";
+import { careerQuestions } from "./clubgames.js";
+import { hiloQuestions } from "./hilo.js";
 import { bothClubsQuestions, shirtQuestions, trophyQuestions, xiQuestions } from "./content.js";
 import { getStore } from "./store.js";
 import { award, getProfile } from "./profile.js";
@@ -20,6 +22,8 @@ export const KINDS = {
   clubs: { title: "Who played for both?", count: 8, seconds: 20 },
   trophy: { title: "Name the trophy", count: 8, seconds: 20 },
   xi: { title: "Complete the XI", count: 3, seconds: 25 },
+  career: { title: "Career path", count: 8, seconds: 20 },
+  hilo: { title: "Higher or Lower", count: 10, seconds: 12 },
 };
 
 const BASE_POINTS = { easy: 80, medium: 100, hard: 130 };
@@ -30,11 +34,16 @@ export async function questionsFor(kind, { difficulty, seed }) {
   const rng = seed ? rngFrom(seed) : Math.random;
   if (kind === "quiz") return buildQuiz({ difficulty, count });
   if (kind === "daily") return buildQuiz({ difficulty: "mixed", count, seed: `daily-${seed}`, excludeVolatile: true });
-  if (kind === "clubs") return bothClubsQuestions(count, rng);
-  if (kind === "trophy") return trophyQuestions(count, rng);
-  if (kind === "shirt") return shirtQuestions(count, rng);
-  if (kind === "xi") return xiQuestions(seed || dayKey(), rng);
-  throw new GameError("Unknown game.");
+  let qs;
+  if (kind === "clubs") qs = bothClubsQuestions(count, rng);
+  else if (kind === "trophy") qs = trophyQuestions(count, rng);
+  else if (kind === "shirt") qs = await shirtQuestions(count, rng);
+  else if (kind === "xi") qs = await xiQuestions(seed || dayKey(), rng);
+  else if (kind === "career") qs = careerQuestions(count, rng);
+  else if (kind === "hilo") qs = await hiloQuestions(count);
+  else throw new GameError("Unknown game.");
+  // The builders list the right answer first: mix the options so it can be anywhere.
+  return qs.map((q) => shuffleQuestion(q, rng));
 }
 
 // A question the player sees: no answer, no internals.

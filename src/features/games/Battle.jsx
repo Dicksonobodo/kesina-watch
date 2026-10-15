@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { ArrowLeft, Check, Copy, MessageCircle, RotateCcw, Share2, Swords, Trophy, Zap } from "lucide-react";
 import { useChat } from "./chat/ChatProvider";
+import { CHAT_GAMES } from "./chat/gameInfo";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
@@ -29,12 +30,15 @@ const BATTLE_GAMES = [
   { id: "clubs", title: "Who played for both?", desc: "Two clubs, one player", art: "clubs" },
   { id: "trophy", title: "Name the trophy", desc: "Guess it from the clue", art: "trophy" },
   { id: "xi", title: "Complete the XI", desc: "Fill the missing players", art: "xi" },
+  { id: "career", title: "Career path", desc: "Whose career is this?", art: "career" },
+  { id: "hilo", title: "Higher or Lower", desc: "Who has more this season?", art: "hilo" },
 ];
 
 export function BattleLobby() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { profile } = useGames();
+  const { profile, toast } = useGames();
+  const chat = useChat();
   const [difficulty, setDifficulty] = useState("mixed");
   const [kind, setKind] = useState("quiz");
   const [code, setCode] = useState("");
@@ -82,7 +86,7 @@ export function BattleLobby() {
 
       {/* 1. pick the game */}
       <Eyebrow className="mt-6 mb-3">1 · Pick a game</Eyebrow>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {BATTLE_GAMES.map((g) => (
           <button
             key={g.id}
@@ -142,6 +146,30 @@ export function BattleLobby() {
       <div className="mt-3">
         <ErrorNote>{error}</ErrorNote>
       </div>
+
+      {/* the other multiplayer games live in the chat */}
+      <section className="mt-8">
+        <Eyebrow className="mb-1">More games with a friend</Eyebrow>
+        <p className="mb-3 text-sm text-mist-500">Played in the chat, one turn at a time. Open a conversation and tap +.</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {CHAT_GAMES.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => {
+                chat.openPanel();
+                toast({ title: g.title, body: "Pick a friend, then tap + in your chat to start.", icon: g.emoji });
+              }}
+              className="flex flex-col items-start gap-2 rounded-2xl bg-white/[.03] p-3 text-left ring-1 ring-white/[.08] transition hover:bg-white/[.06] hover:ring-signal/40"
+            >
+              <span className="grid size-10 place-items-center rounded-xl text-xl" style={{ background: g.color }}>
+                {g.emoji}
+              </span>
+              <span className="text-[13px] leading-tight font-bold">{g.title}</span>
+              <span className="text-[11px] leading-tight text-mist-500">{g.blurb}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="mt-8">
         <Eyebrow className="mb-3">Your rivals</Eyebrow>
