@@ -643,15 +643,17 @@ function MessageMenu({ m, me, peer, onClose, onEdit }) {
   const mine = m.from === me;
   const canEdit = mine && m.type === "text" && Date.now() - m.at < EDIT_WINDOW_MS;
   const [copied, setCopied] = useState(false);
+  // Letting go of the long-press can send a click onto this backdrop; only a new tap closes it.
+  const armed = useRef(false);
   const actions = [
     m.text && { icon: Copy, label: copied ? "Copied" : "Copy", run: () => (navigator.clipboard?.writeText(m.text), setCopied(true), setTimeout(onClose, 450)) },
     canEdit && { icon: Pencil, label: "Edit", run: () => onEdit(m) },
     mine && { icon: Undo2, label: "Unsend", danger: true, run: () => (unsend(m), onClose()) },
   ].filter(Boolean);
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={onClose} className="absolute inset-0 z-30 flex flex-col justify-center bg-black/55 px-4 backdrop-blur-md">
-      <motion.div initial={{ scale: 0.92, y: 8 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", stiffness: 420, damping: 28 }} onClick={(e) => e.stopPropagation()} className={cn("flex flex-col gap-2", mine ? "items-end" : "items-start")}>
-        <div className="flex items-center gap-0.5 rounded-full bg-ink-800 px-1.5 py-1 shadow-2xl ring-1 ring-white/10">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onPointerDown={() => (armed.current = true)} onClick={() => armed.current && onClose()} className="absolute inset-0 z-30 flex flex-col justify-center bg-black/55 px-4 backdrop-blur-md">
+      <motion.div initial={{ scale: 0.92, y: 8 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", stiffness: 420, damping: 28 }} className={cn("pointer-events-none flex flex-col gap-2 [&>*]:pointer-events-auto", mine ? "items-end" : "items-start")}>
+        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-0.5 rounded-full bg-ink-800 px-1.5 py-1 shadow-2xl ring-1 ring-white/10">
           {REACTIONS.map((e) => (
             <button
               key={e}
@@ -665,11 +667,11 @@ function MessageMenu({ m, me, peer, onClose, onEdit }) {
             </button>
           ))}
         </div>
-        <div className={cn("max-h-40 max-w-[82%] overflow-hidden rounded-[20px] px-3.5 py-2 text-[15px] leading-snug break-words whitespace-pre-wrap shadow-2xl", mine ? "bg-signal text-ink-950" : "bg-white/[.12] text-white")}>
+        <div onClick={(e) => e.stopPropagation()} className={cn("max-h-40 max-w-[82%] overflow-hidden rounded-[20px] px-3.5 py-2 text-[15px] leading-snug break-words whitespace-pre-wrap shadow-2xl", mine ? "bg-signal text-ink-950" : "bg-white/[.12] text-white")}>
           {m.type === "text" ? m.text : m.type === "invite" ? `⚔️ ${m.invite?.title} · ${m.invite?.code}` : `${CHAT_GAMES.find((g) => g.id === m.game?.type)?.emoji ?? "🎮"} ${m.game?.title ?? "Game"}`}
         </div>
         {actions.length > 0 && (
-          <div className="w-48 overflow-hidden rounded-2xl bg-ink-800 shadow-2xl ring-1 ring-white/10">
+          <div onClick={(e) => e.stopPropagation()} className="w-48 overflow-hidden rounded-2xl bg-ink-800 shadow-2xl ring-1 ring-white/10">
             {actions.map((a, i) => (
               <button key={a.label} onClick={a.run} className={cn("flex w-full items-center justify-between px-4 py-3 text-left text-[15px] transition hover:bg-white/[.06]", i > 0 && "border-t border-white/[.06]", a.danger && "text-live")}>
                 {a.label}

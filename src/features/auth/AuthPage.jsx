@@ -66,7 +66,7 @@ export function AuthPage() {
     <div className="relative grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       <Showcase />
 
-      <div className="relative flex flex-col px-5 py-8 sm:px-10 lg:px-16">
+      <div className="relative flex flex-col px-5 pt-[calc(2rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-10 lg:px-16 lg:pt-8 lg:pb-8">
         <div className="lg:hidden">
           <Logo />
         </div>

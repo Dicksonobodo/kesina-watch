@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, Check, Copy, Download, Move, Plus, RotateCcw, Save, Shirt, Trash2, UserPlus, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, Download, Hand, Move, Plus, RotateCcw, Save, Shirt, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
@@ -105,6 +105,7 @@ export function LineupEditor() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [hand, setHand] = useState(false); // "Edit by hand": players can be dragged anywhere
   const pitch = useRef(null);
   const drag = useRef(null);
 
@@ -142,12 +143,17 @@ export function LineupEditor() {
     } catch {
       /* fine */
     }
-    drag.current = { i, x: e.clientX, y: e.clientY, moved: false };
+    drag.current = { i, x: e.clientX, y: e.clientY, moved: false, tapOnly: !hand };
   }
   function move(e) {
     const d = drag.current;
     if (!d) return;
-    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
+    const far = Math.hypot(e.clientX - d.x, e.clientY - d.y) >= 6;
+    if (d.tapOnly) {
+      if (far) d.cancelled = true; // outside "Edit by hand" players don't move, and a drag isn't a tap
+      return;
+    }
+    if (!d.moved && !far) return;
     d.moved = true;
     const r = pitch.current.getBoundingClientRect();
     const x = Math.max(4, Math.min(96, ((e.clientX - r.left) / r.width) * 100));
@@ -164,7 +170,7 @@ export function LineupEditor() {
   function up() {
     const d = drag.current;
     drag.current = null;
-    if (d && !d.moved) setSelected(d.i);
+    if (d && !d.moved && !d.cancelled) setSelected(d.i);
   }
 
   async function save() {
@@ -236,19 +242,31 @@ export function LineupEditor() {
           ) : (
             <h1 className="font-display text-3xl font-extrabold tracking-tight">{lineup.team}</h1>
           )}
-          <p className="mt-1 text-sm text-mist-500">{lineup.custom ? `Custom shape (started from ${lineup.formation})` : lineup.formation}</p>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-mist-500">{lineup.custom ? `Custom shape (started from ${lineup.formation})` : lineup.formation}</p>
+            {mine && (
+              <button
+                onClick={() => setHand((h) => !h)}
+                aria-pressed={hand}
+                className={cn("inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-semibold ring-1 transition", hand ? "bg-signal text-ink-950 ring-signal" : "bg-white/[.05] text-mist-100 ring-white/15 hover:bg-white/[.09]")}
+              >
+                {hand ? <Check className="size-4" /> : <Hand className="size-4" />} {hand ? "Done moving" : "Edit by hand"}
+              </button>
+            )}
+          </div>
+          {hand && <p className="mt-2 rounded-2xl bg-signal/10 px-3.5 py-2 text-[13px] text-signal ring-1 ring-signal/30">Drag any player to a new spot to make your own shape. Tap Done moving when you're happy.</p>}
 
-          <div ref={pitch} onPointerMove={move} onPointerUp={up} onPointerCancel={up} className="relative mx-auto mt-4 aspect-[68/100] w-full max-w-[min(100%,62vh)] touch-none overflow-hidden rounded-3xl select-none" style={{ background: "repeating-linear-gradient(180deg,#15803d 0 10%,#16a34a 10% 20%)" }}>
+          <div ref={pitch} onPointerMove={move} onPointerUp={up} onPointerCancel={up} className={cn("relative mx-auto mt-4 aspect-[68/100] w-full max-w-[min(100%,62vh)] touch-none overflow-hidden rounded-3xl transition select-none", hand && "ring-4 ring-signal/70")} style={{ background: "repeating-linear-gradient(180deg,#15803d 0 10%,#16a34a 10% 20%)" }}>
             <PitchLines />
             {lineup.players.map((p, i) => (
               <button
                 key={i}
                 onPointerDown={(e) => down(e, i)}
-                className={cn("absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center", mine ? "cursor-grab active:cursor-grabbing" : "cursor-default")}
+                className={cn("absolute flex -translate-x-1/2 -translate-y-1/2 touch-none flex-col items-center [-webkit-touch-callout:none]", mine && hand ? "cursor-grab active:cursor-grabbing" : mine ? "cursor-pointer" : "cursor-default")}
                 style={{ left: `${p.x}%`, top: `${p.y}%` }}
                 aria-label={`${p.name}, number ${p.number}`}
               >
-                <span className="grid size-10 place-items-center rounded-full font-display text-[15px] font-extrabold shadow-[0_4px_10px_rgba(0,0,0,.45)] ring-2 ring-white/80 sm:size-11" style={{ background: i === 0 ? "#f59e0b" : kit.shirt, color: i === 0 ? "#111827" : kit.text }}>
+                <span className={cn("grid size-10 place-items-center rounded-full font-display text-[15px] font-extrabold shadow-[0_4px_10px_rgba(0,0,0,.45)] ring-2 ring-white/80 sm:size-11", hand && "animate-pulse ring-4")} style={{ background: i === 0 ? "#f59e0b" : kit.shirt, color: i === 0 ? "#111827" : kit.text }}>
                   {p.number}
                 </span>
                 <span className="mt-1 max-w-24 truncate rounded-md bg-black/55 px-1.5 py-0.5 text-[11px] leading-tight font-semibold text-white">{p.name}</span>
@@ -257,7 +275,7 @@ export function LineupEditor() {
           </div>
           {mine && (
             <p className="mt-2 flex items-center justify-center gap-1.5 text-xs text-mist-500">
-              <Move className="size-3.5" /> Drag players to move them. Tap one to change the name or number.
+              <Move className="size-3.5" /> {hand ? "Drag to move · tap Done moving when finished" : "Tap a player to change the name or number · Edit by hand to move them"}
             </p>
           )}
         </div>
@@ -364,8 +382,11 @@ export function LineupEditor() {
 }
 
 function PlayerSheet({ player, keeper, onClose, onChange }) {
+  // The tap that opened this box also sends a click a moment later; don't let it close the box.
+  const openedAt = useRef(Date.now());
+  const backdrop = () => Date.now() - openedAt.current > 400 && onClose();
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] grid place-items-end bg-black/60 p-3 backdrop-blur-sm sm:place-items-center" onClick={onClose}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] grid place-items-end bg-black/60 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:place-items-center" onClick={backdrop}>
       <motion.form
         initial={{ y: 30 }}
         animate={{ y: 0 }}

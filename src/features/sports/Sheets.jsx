@@ -35,7 +35,7 @@ export function Sheet({ onClose, label, children, z = "z-[98]", wide = false }) 
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 40, opacity: 0 }}
         transition={{ type: "spring", stiffness: 360, damping: 34 }}
-        className={cn("relative mt-auto max-h-[90dvh] w-full overflow-y-auto rounded-t-[28px] bg-ink-900 ring-1 ring-white/10 sm:mt-0 sm:rounded-[28px]", wide ? "max-w-3xl" : "max-w-lg")}
+        className={cn("relative mt-auto max-h-[calc(100dvh-env(safe-area-inset-top)-1.5rem)] w-full overflow-y-auto rounded-t-[28px] bg-ink-900 pb-[env(safe-area-inset-bottom)] ring-1 ring-white/10 sm:mt-0 sm:max-h-[90dvh] sm:rounded-[28px] sm:pb-0", wide ? "max-w-3xl" : "max-w-lg")}
       >
         <button onClick={onClose} aria-label="Close" className="absolute top-3 right-3 z-10 grid size-9 place-items-center rounded-full bg-white/[.08] transition hover:bg-white/[.14]">
           <X className="size-4" />

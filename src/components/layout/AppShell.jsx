@@ -66,7 +66,7 @@ export function AppShell() {
       </aside>
 
       {/* Mobile top bar */}
-      <header className="glass-strong sticky top-0 z-30 flex h-14 items-center justify-between !border-x-0 !border-t-0 px-4 lg:hidden">
+      <header className="glass-strong sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between !border-x-0 !border-t-0 px-4 pt-[env(safe-area-inset-top)] lg:hidden">
         <NavLink to="/">
           <Logo />
         </NavLink>

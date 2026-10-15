@@ -93,7 +93,7 @@ export function MatchCentre({ match: base, onClose }) {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 40, opacity: 0 }}
         transition={{ type: "spring", stiffness: 340, damping: 34 }}
-        className="relative mt-auto flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] bg-ink-900 ring-1 ring-white/10 sm:mt-0 sm:rounded-[28px]"
+        className="relative mt-auto flex max-h-[calc(100dvh-env(safe-area-inset-top)-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] bg-ink-900 pb-[env(safe-area-inset-bottom)] ring-1 ring-white/10 sm:mt-0 sm:max-h-[94dvh] sm:rounded-[28px] sm:pb-0"
       >
         {/* Scoreboard header */}
         <div className="relative shrink-0 overflow-hidden px-5 pt-5 pb-4 sm:px-7">

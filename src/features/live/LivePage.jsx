@@ -241,7 +241,7 @@ function PinLiveDialog({ onClose, onSaved }) {
 
   const input = "h-11 w-full rounded-2xl bg-white/[.05] px-4 text-[15px] ring-1 ring-white/10 outline-none placeholder:text-mist-700 focus:ring-live/50";
   return (
-    <div className="fixed inset-0 z-[120] grid place-items-end bg-black/60 p-3 backdrop-blur-sm sm:place-items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-[120] grid place-items-end bg-black/60 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:place-items-center" onClick={onClose}>
       <form onSubmit={save} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-[28px] bg-ink-900 p-5 ring-1 ring-white/10 sm:p-6">
         <div className="flex items-center justify-between">
           <h3 className="font-display text-xl font-bold">Pin a live for everyone</h3>
