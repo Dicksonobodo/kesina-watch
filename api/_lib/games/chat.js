@@ -246,7 +246,7 @@ export async function canMessage(identity, peerUid) {
   await resolvePeer(store, identity, { peer: peerUid });
 }
 
-const GAME_EMOJI = { swipe: "🔤", whot: "🃏", darts: "🎯" };
+const GAME_EMOJI = { swipe: "🔤", whot: "🃏", darts: "🎯", behind: "🕵️" };
 
 /**
  * Called by the chat-games module each time a turn is handed over: a new game bubble arrives at

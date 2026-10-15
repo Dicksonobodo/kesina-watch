@@ -767,6 +767,25 @@ function GamePreview({ game, me, peer }) {
       </>
     );
   }
+  if (game.type === "behind") {
+    const score = game.score ?? {};
+    return (
+      <>
+        <span className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 items-end gap-3">
+          {[["?", "from-slate-600 to-slate-900", -6], ["?", "from-fuchsia-500 to-violet-800", 6]].map(([q, bg, rot], i) => (
+            <span key={i} className={cn("grid h-20 w-16 place-items-center rounded-2xl bg-gradient-to-b font-display text-3xl font-extrabold text-white/90 shadow-lg ring-2 ring-white/25", bg)} style={{ transform: `rotate(${rot}deg)` }}>
+              {q}
+            </span>
+          ))}
+        </span>
+        <span className="absolute inset-x-2 bottom-2 flex justify-between text-[10px] font-semibold">
+          <span className="rounded-full bg-black/55 px-2 py-0.5">You · {score[me] ?? 0}</span>
+          <span className="rounded-full bg-black/55 px-2 py-0.5">Round {Math.min(game.round ?? 1, 3)} of 3</span>
+          <span className="rounded-full bg-black/55 px-2 py-0.5">{peer?.name ?? "Them"} · {score[other(score)] ?? 0}</span>
+        </span>
+      </>
+    );
+  }
   // word swipe
   const scores = game.scores ?? {};
   const mine = scores[me];

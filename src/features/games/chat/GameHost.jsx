@@ -14,7 +14,8 @@ import { useScrollLock } from "./useScrollLock";
 const WordSwipe = lazy(() => import("./WordSwipe"));
 const Whot = lazy(() => import("./Whot"));
 const Darts = lazy(() => import("./Darts"));
-const SCREENS = { swipe: WordSwipe, whot: Whot, darts: Darts };
+const Behind = lazy(() => import("./Behind"));
+const SCREENS = { swipe: WordSwipe, whot: Whot, darts: Darts, behind: Behind };
 
 /*
  * A chat game, opened like an iMessage game: a sheet that slides up over the conversation, with
@@ -86,7 +87,7 @@ export function GameHost() {
           rewarded(r.reward);
         }
         // Your turn is over and on its way: show "Sent", then go back to the conversation.
-        if (r.sent && r.game.status === "playing") {
+        if (r.sent && r.game.status === "playing" && r.game.turn !== r.game.me) {
           clearTimeout(sentTimer.current);
           sentTimer.current = setTimeout(() => {
             setSent(true);

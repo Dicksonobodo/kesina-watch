@@ -4,6 +4,7 @@ import { canMessage, chatIdOf, postGame, touchGame } from "./chat.js";
 import * as swipe from "./cg/swipe.js";
 import * as whot from "./cg/whot.js";
 import * as darts from "./cg/darts.js";
+import * as behind from "./cg/behind.js";
 import { dayKey, GameError, newId, rateLimit } from "./util.js";
 
 /*
@@ -12,7 +13,7 @@ import { dayKey, GameError, newId, rateLimit } from "./util.js";
  * through `cg.get`, which sends each player what they are allowed to see.
  */
 
-const GAMES = { swipe, whot, darts };
+const GAMES = { swipe, whot, darts, behind };
 const MAX_REWARDED_PER_DAY = 8; // so two friends can't farm XP by playing all day
 
 const path = (id) => `cgames/${id}`;
@@ -108,7 +109,7 @@ export async function moveGame(identity, id, body) {
     const g = await load(store, identity, id);
     const m = GAMES[g.type];
     const turnBefore = g.turn;
-    const result = m.move(g, identity.uid, body);
+    const result = await m.move(g, identity.uid, body); // some moves look things up (a player's photo)
     if (result.ended) {
       g.status = "done";
       g.winner = result.winner;
@@ -120,7 +121,7 @@ export async function moveGame(identity, id, body) {
     const done = g.status === "done";
     const other = g.players.find((p) => p !== identity.uid);
     // A turn handed over (or the game finished, or a Word Swipe round played): send it into the chat.
-    const handoff = done || (turnBefore === identity.uid && g.turn === other) || (g.type === "swipe" && body.type === "submit");
+    const handoff = done || Boolean(result.handoff) || (turnBefore === identity.uid && g.turn === other) || (g.type === "swipe" && body.type === "submit");
     const deliverToChat = async () => {
       if (handoff) {
         const posted = await postGame(identity, other, cardOf(g), g.msgId);

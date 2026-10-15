@@ -8,6 +8,7 @@ import { footlePlayers, giveUpFootle, guessFootle, startFootle } from "./_lib/ga
 import { careerNames, getGrid, guessGrid } from "./_lib/games/clubgames.js";
 import { blockPerson, editMessage, openChat, reactTo, reportPerson, searchPeople, sendMessage, syncChat, syncDirectory, unsendMessage } from "./_lib/games/chat.js";
 import { createGame, getGame, moveGame, rematch as rematchGame } from "./_lib/games/cgames.js";
+import { behindPlayers } from "./_lib/games/cg/behind.js";
 import { deleteCreation, getCreation, listCreations, saveCreation } from "./_lib/games/creations.js";
 import { addFeatured, listFeatured, removeFeatured } from "./_lib/games/featured.js";
 import { finishKeepy, startKeepy } from "./_lib/games/keepy.js";
@@ -26,7 +27,7 @@ import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
  */
 
 // Calls that don't count as "playing today" for the admin numbers.
-const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending", "career.names", "footle.players", "grid.get", "chat.sync", "chat.search", "chat.open", "cg.get", "live.featured", "create.list", "create.get"]);
+const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending", "career.names", "footle.players", "grid.get", "chat.sync", "chat.search", "chat.open", "cg.get", "live.featured", "create.list", "create.get", "behind.players"]);
 
 const ACTIONS = {
   /* who am I (no database access: used by the sidebar to show the Admin link) */
@@ -101,6 +102,7 @@ const ACTIONS = {
   "cg.get": (who, b) => getGame(who, String(b.id ?? ""), Number(b.v ?? -1)),
   "cg.move": (who, b) => moveGame(who, String(b.id ?? ""), b),
   "cg.rematch": (who, b) => rematchGame(who, String(b.id ?? "")),
+  "behind.players": async () => ({ players: await behindPlayers() }),
 
   /* lives an admin pinned for everyone (Live page) */
   "live.featured": () => listFeatured(),
