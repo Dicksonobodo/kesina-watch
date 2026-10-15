@@ -67,7 +67,7 @@ export function GamesHub() {
             <span className="size-1.5 animate-pulse rounded-full bg-rose-400" /> Multiplayer
           </span>
           <h2 className="mt-3 font-display text-2xl leading-tight font-extrabold tracking-tight sm:text-3xl">Head-to-Head</h2>
-          <p className="mt-1.5 max-w-md text-sm text-mist-300">Play a friend or someone at your level: 7 football battles, plus Word Swipe, Naija Whot, Darts and Who's Behind You? in the chat.</p>
+          <p className="mt-1.5 max-w-md text-sm text-mist-300">Play a friend or someone at your level: 7 football battles, plus Tic Tac Toe, Word Swipe, Naija Whot, Darts and Who's Behind You? in the chat.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link to="/games/battle" className="inline-flex h-11 items-center gap-2 rounded-full bg-signal px-5 text-sm font-bold text-ink-950 transition hover:brightness-110">
               <Swords className="size-4" /> Start a battle

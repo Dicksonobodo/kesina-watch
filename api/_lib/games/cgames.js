@@ -5,6 +5,7 @@ import * as swipe from "./cg/swipe.js";
 import * as whot from "./cg/whot.js";
 import * as darts from "./cg/darts.js";
 import * as behind from "./cg/behind.js";
+import * as ttt from "./cg/ttt.js";
 import { dayKey, GameError, newId, rateLimit } from "./util.js";
 
 /*
@@ -13,7 +14,7 @@ import { dayKey, GameError, newId, rateLimit } from "./util.js";
  * through `cg.get`, which sends each player what they are allowed to see.
  */
 
-const GAMES = { swipe, whot, darts, behind };
+const GAMES = { swipe, whot, darts, behind, ttt };
 const MAX_REWARDED_PER_DAY = 8; // so two friends can't farm XP by playing all day
 
 const path = (id) => `cgames/${id}`;

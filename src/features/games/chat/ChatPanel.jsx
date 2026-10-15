@@ -767,6 +767,41 @@ function GamePreview({ game, me, peer }) {
       </>
     );
   }
+  if (game.type === "ttt") {
+    const board = game.board ?? Array(9).fill("");
+    const marks = game.marks ?? {};
+    return (
+      <>
+        <svg viewBox="0 0 300 300" className="absolute top-1/2 left-1/2 size-28 -translate-x-1/2 -translate-y-1/2">
+          <g stroke="rgba(255,255,255,.3)" strokeWidth="7" strokeLinecap="round">
+            {[100, 200].map((v) => (
+              <g key={v}>
+                <line x1={v} y1="18" x2={v} y2="282" />
+                <line x1="18" y1={v} x2="282" y2={v} />
+              </g>
+            ))}
+          </g>
+          {board.map((m, i) => {
+            const cx = 50 + (i % 3) * 100;
+            const cy = 50 + Math.floor(i / 3) * 100;
+            const dim = game.line && !game.line.includes(i);
+            if (m === "X") return <g key={i} stroke="var(--color-signal)" strokeWidth="13" strokeLinecap="round" opacity={dim ? 0.3 : 1}><path d={`M${cx - 24} ${cy - 24}L${cx + 24} ${cy + 24}`} /><path d={`M${cx + 24} ${cy - 24}L${cx - 24} ${cy + 24}`} /></g>;
+            if (m === "O") return <circle key={i} cx={cx} cy={cy} r="26" stroke="#ff5d8f" strokeWidth="13" fill="none" opacity={dim ? 0.3 : 1} />;
+            return null;
+          })}
+          {game.line && (() => {
+            const p = (i) => [50 + (i % 3) * 100, 50 + Math.floor(i / 3) * 100];
+            const [a, b] = [p(game.line[0]), p(game.line[2])];
+            return <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#fff" strokeWidth="11" strokeLinecap="round" />;
+          })()}
+        </svg>
+        <span className="absolute inset-x-2 bottom-2 flex justify-between text-[10px] font-semibold">
+          <span className="rounded-full bg-black/55 px-2 py-0.5">You · {marks[me] ?? "X"}</span>
+          <span className="rounded-full bg-black/55 px-2 py-0.5">{peer?.name ?? "Them"} · {marks[other(marks)] ?? "O"}</span>
+        </span>
+      </>
+    );
+  }
   if (game.type === "behind") {
     const score = game.score ?? {};
     return (
