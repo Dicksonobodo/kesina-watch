@@ -194,6 +194,21 @@ export function ChatProvider({ children }) {
     await gamesApi("chat.unsend", { chat, msg: msg.id }).catch((e) => setError(e.message));
   }, []);
 
+  const editMessage = useCallback(async (msg, text) => {
+    const chat = chatRef.current;
+    if (!chat) return;
+    const before = msg.text;
+    setThread((t) => ({ ...t, messages: t.messages.map((m) => (m.id === msg.id ? { ...m, text, edited: true } : m)) }));
+    try {
+      const r = await gamesApi("chat.edit", { chat, msg: msg.id, text });
+      setThread((t) => ({ ...t, messages: mergeMessages(t.messages, [r.message]) }));
+    } catch (err) {
+      setThread((t) => ({ ...t, messages: t.messages.map((m) => (m.id === msg.id ? { ...m, text: before, edited: msg.edited } : m)) }));
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
   const setTyping = useCallback((on) => {
     typingRef.current.want = on;
   }, []);
@@ -236,8 +251,8 @@ export function ChatProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ open, view, inbox, unread, peer, thread, gameId, setGameId, pendingInvite, setPendingInvite, error, setError, openPanel, closePanel, showList, openThread, send, react, unsend, setTyping, block, report, startGame, backToChat, shareInvite, me: meUid }),
-    [open, view, inbox, unread, peer, thread, gameId, pendingInvite, error, openPanel, closePanel, showList, openThread, send, react, unsend, setTyping, block, report, startGame, backToChat, shareInvite, meUid],
+    () => ({ open, view, inbox, unread, peer, thread, gameId, setGameId, pendingInvite, setPendingInvite, error, setError, openPanel, closePanel, showList, openThread, send, react, unsend, editMessage, setTyping, block, report, startGame, backToChat, shareInvite, me: meUid }),
+    [open, view, inbox, unread, peer, thread, gameId, pendingInvite, error, openPanel, closePanel, showList, openThread, send, react, unsend, editMessage, setTyping, block, report, startGame, backToChat, shareInvite, meUid],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

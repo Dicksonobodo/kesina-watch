@@ -96,7 +96,7 @@ export async function searchPeople(identity, q) {
 
 /* ---------- reading ---------- */
 
-const view = (m) => ({ id: m.id, from: m.from, at: m.at, upd: m.upd, type: m.type, stale: Boolean(m.stale), text: m.deleted ? "" : m.text ?? "", invite: m.deleted ? null : m.invite ?? null, game: m.deleted ? null : m.game ?? null, reactions: m.deleted ? {} : m.reactions ?? {}, deleted: Boolean(m.deleted) });
+const view = (m) => ({ id: m.id, from: m.from, at: m.at, upd: m.upd, type: m.type, stale: Boolean(m.stale), edited: Boolean(m.edited) && !m.deleted, text: m.deleted ? "" : m.text ?? "", invite: m.deleted ? null : m.invite ?? null, game: m.deleted ? null : m.game ?? null, reactions: m.deleted ? {} : m.reactions ?? {}, deleted: Boolean(m.deleted) });
 
 async function requireChat(store, identity, chatId) {
   const chat = await store.get(`chats/${chatId}`);
@@ -295,6 +295,36 @@ export async function unsendMessage(identity, chatId, msgId) {
   if (!m || m.from !== identity.uid) throw new GameError("You can only unsend your own messages.", 403);
   await store.update(path, { deleted: true, text: "", invite: null, upd: stamp() });
   return { ok: true };
+}
+
+const EDIT_WINDOW_MS = 15 * 60_000; // like iMessage: a message can be edited for 15 minutes
+
+export async function editMessage(identity, chatId, msgId, text) {
+  rateLimit(`chatedit:${identity.uid}`, 30);
+  const store = await getStore();
+  const chat = await requireChat(store, identity, chatId);
+  const path = `chatmsg_${chatId}/${msgId}`;
+  const m = await store.get(path);
+  if (!m || m.from !== identity.uid) throw new GameError("You can only edit your own messages.", 403);
+  if (m.deleted || m.type !== "text") throw new GameError("That message can't be edited.");
+  if (Date.now() - m.at > EDIT_WINDOW_MS) throw new GameError("Messages can only be edited for 15 minutes after sending.");
+  const value = clean(text);
+  if (!value) throw new GameError("Type something, or unsend the message instead.");
+  if (value === m.text) return { message: view(m) };
+  const upd = stamp();
+  await store.update(path, { text: value, edited: true, upd });
+  // If it is the newest message, the conversation list shows the new text too.
+  if (chat.last?.at === m.at) {
+    const peerUid = chat.memberIds.find((u) => u !== identity.uid);
+    const preview = value.slice(0, 80);
+    await Promise.all([
+      store.set(`chats/${chatId}`, { "last.text": preview }, { merge: true }),
+      store.set(`inbox_${identity.uid}/${chatId}`, { "last.text": preview }, { merge: true }),
+      store.set(`inbox_${peerUid}/${chatId}`, { "last.text": preview }, { merge: true }),
+      store.set(`chatmeta/${peerUid}`, { v: inc(1) }, { merge: true }),
+    ]);
+  }
+  return { message: view({ ...m, text: value, edited: true, upd }) };
 }
 
 export async function blockPerson(identity, peerUid, blocked) {

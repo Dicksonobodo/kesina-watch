@@ -6,7 +6,7 @@ import { guessAnswer, guessGiveUp, guessReveal, startGuess } from "./_lib/games/
 import { answerHilo, startHilo } from "./_lib/games/hilo.js";
 import { footlePlayers, giveUpFootle, guessFootle, startFootle } from "./_lib/games/footle.js";
 import { careerNames, getGrid, guessGrid } from "./_lib/games/clubgames.js";
-import { blockPerson, openChat, reactTo, reportPerson, searchPeople, sendMessage, syncChat, syncDirectory, unsendMessage } from "./_lib/games/chat.js";
+import { blockPerson, editMessage, openChat, reactTo, reportPerson, searchPeople, sendMessage, syncChat, syncDirectory, unsendMessage } from "./_lib/games/chat.js";
 import { createGame, getGame, moveGame, rematch as rematchGame } from "./_lib/games/cgames.js";
 import { addFeatured, listFeatured, removeFeatured } from "./_lib/games/featured.js";
 import { finishKeepy, startKeepy } from "./_lib/games/keepy.js";
@@ -91,6 +91,7 @@ const ACTIONS = {
   "chat.send": (who, b) => sendMessage(who, b),
   "chat.react": (who, b) => reactTo(who, String(b.chat ?? ""), String(b.msg ?? ""), b.emoji),
   "chat.unsend": (who, b) => unsendMessage(who, String(b.chat ?? ""), String(b.msg ?? "")),
+  "chat.edit": (who, b) => editMessage(who, String(b.chat ?? ""), String(b.msg ?? ""), b.text),
   "chat.block": (who, b) => blockPerson(who, String(b.uid ?? ""), Boolean(b.blocked)),
   "chat.report": (who, b) => reportPerson(who, String(b.chat ?? ""), b.reason),
 

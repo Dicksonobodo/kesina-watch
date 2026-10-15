@@ -56,6 +56,19 @@
   ::-webkit-scrollbar-track { background: transparent; }
 }
 
+/*
+ * Phones (iPhone Safari especially) zoom the page into any text box smaller than 16px when you tap
+ * it. Text boxes are 16px on touch screens so that never happens; pinch-to-zoom still works.
+ * (Outside @layer on purpose, so it wins over the text-[15px] style utilities.)
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="button"], [type="submit"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Film grain over everything */
 body::after {
   content: "";

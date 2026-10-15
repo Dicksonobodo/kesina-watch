@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, Ban, ChevronDown, Copy, Crown, Equal, Flag, MessageCircle, MoreHorizontal, Plus, Search, Send, SquarePen, Swords, Undo2, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, ChevronDown, Copy, Crown, Equal, Flag, MessageCircle, Pencil, MoreHorizontal, Plus, Search, Send, SquarePen, Swords, Undo2, X } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
@@ -206,7 +206,10 @@ function ChatList() {
 /* ---------- one conversation ---------- */
 
 function Thread() {
-  const { peer, thread, showList, closePanel, send, me, error, setError, setTyping, block, report, startGame } = useChat();
+  const { peer, thread, showList, closePanel, send, me, error, setError, setTyping, block, report, startGame, editMessage } = useChat();
+  const [held, setHeld] = useState(null); // the message whose menu is open (press and hold)
+  const [editing, setEditing] = useState(null); // the message being edited
+  const input = useRef(null);
   const navigate = useNavigate();
   const [text, setText] = useState("");
   const [menu, setMenu] = useState(null); // null | "more" | "attach" | "battle"
@@ -249,12 +252,34 @@ function Thread() {
     const value = text.trim();
     if (!value) return;
     setText("");
+    if (editing) {
+      const msg = editing;
+      setEditing(null);
+      try {
+        await editMessage(msg, value);
+      } catch {
+        setEditing(msg);
+        setText(value);
+      }
+      return;
+    }
     stick.current = true;
     try {
       await send({ text: value });
     } catch {
       setText(value);
     }
+  }
+
+  function startEdit(m) {
+    setHeld(null);
+    setEditing(m);
+    setText(m.text);
+    setTimeout(() => input.current?.focus(), 50);
+  }
+  function cancelEdit() {
+    setEditing(null);
+    setText("");
   }
 
   async function play(type) {
@@ -356,7 +381,7 @@ function Thread() {
               {stamp(it.at)}
             </p>
           ) : (
-            <Bubble key={it.key} m={it.m} first={it.first} last={it.last} me={me} peer={peer} />
+            <Bubble key={it.key} m={it.m} first={it.first} last={it.last} me={me} peer={peer} onHold={setHeld} />
           ),
         )}
         {lastMine && (
@@ -372,6 +397,8 @@ function Thread() {
           </div>
         )}
       </div>
+
+      <AnimatePresence>{held && <MessageMenu m={held} me={me} peer={peer} onClose={() => setHeld(null)} onEdit={startEdit} />}</AnimatePresence>
 
       {error && (
         <p className="mx-3 mb-1 flex items-start gap-2 rounded-xl bg-live/10 px-3 py-2 text-[12.5px] text-live">
@@ -427,6 +454,17 @@ function Thread() {
               )}
             </div>
           )}
+          {editing && (
+            <div className="mb-2 flex items-center gap-2 rounded-xl bg-white/[.05] px-3 py-2 text-[12.5px]">
+              <Pencil className="size-3.5 shrink-0 text-signal" />
+              <span className="min-w-0 flex-1 truncate text-mist-300">
+                Editing: <span className="text-mist-500">{editing.text}</span>
+              </span>
+              <button type="button" onClick={cancelEdit} className="font-semibold text-signal">
+                Cancel
+              </button>
+            </div>
+          )}
           <form onSubmit={submit} className="flex items-end gap-2">
             <button
               type="button"
@@ -437,6 +475,7 @@ function Thread() {
               {busy ? <Spinner className="size-4" /> : <Plus className="size-5" />}
             </button>
             <input
+              ref={input}
               value={text}
               onChange={(e) => {
                 setText(e.target.value);
@@ -444,15 +483,15 @@ function Thread() {
               }}
               onBlur={() => setTyping(false)}
               onFocus={() => setMenu(null)}
-              placeholder="Message"
+              placeholder={editing ? "Edit message" : "Message"}
               aria-label="Message"
               maxLength={1000}
               enterKeyHint="send"
               autoComplete="off"
               className="h-9 min-w-0 flex-1 rounded-full bg-white/[.06] px-4 text-[15px] ring-1 ring-white/10 outline-none placeholder:text-mist-700 focus:ring-signal/50"
             />
-            <button type="submit" disabled={!text.trim()} aria-label="Send" className="grid size-9 shrink-0 place-items-center rounded-full bg-signal text-ink-950 transition disabled:bg-white/[.08] disabled:text-mist-700">
-              <Send className="size-[17px]" />
+            <button type="submit" disabled={!text.trim()} aria-label={editing ? "Save edit" : "Send"} className="grid size-9 shrink-0 place-items-center rounded-full bg-signal text-ink-950 transition disabled:bg-white/[.08] disabled:text-mist-700">
+              {editing ? <Check className="size-[18px]" strokeWidth={3} /> : <Send className="size-[17px]" />}
             </button>
           </form>
         </div>
@@ -463,12 +502,60 @@ function Thread() {
 
 /* ---------- a message ---------- */
 
-function Bubble({ m, first, last, me, peer }) {
-  const { react, unsend, setGameId, closePanel } = useChat();
+const EDIT_WINDOW_MS = 15 * 60_000;
+const HOLD_MS = 420;
+
+/**
+ * Press and hold (like WhatsApp): fires after a short hold if the finger doesn't move. Right-click
+ * does the same on a computer. A hold swallows the tap that would follow it.
+ */
+function useHold(onHold) {
+  const timer = useRef(0);
+  const start = useRef(null);
+  const fired = useRef(false);
+  const cancel = useCallback(() => clearTimeout(timer.current), []);
+  useEffect(() => cancel, [cancel]);
+  return {
+    fired,
+    handlers: {
+      onPointerDown: (e) => {
+        if (e.button > 0) return;
+        fired.current = false;
+        start.current = { x: e.clientX, y: e.clientY };
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => {
+          fired.current = true;
+          navigator.vibrate?.(12);
+          onHold();
+        }, HOLD_MS);
+      },
+      onPointerMove: (e) => {
+        if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) cancel(); // scrolling, not holding
+      },
+      onPointerUp: cancel,
+      onPointerLeave: cancel,
+      onPointerCancel: cancel,
+      onContextMenu: (e) => {
+        e.preventDefault();
+        cancel();
+        fired.current = true;
+        onHold();
+      },
+    },
+  };
+}
+
+function Bubble({ m, first, last, me, peer, onHold }) {
+  const { setGameId, closePanel } = useChat();
   const navigate = useNavigate();
-  const [actions, setActions] = useState(false);
   const mine = m.from === me;
   const reacts = Object.entries(m.reactions ?? {});
+  const hold = useHold(() => !m.pending && onHold(m));
+  // a tap right after a hold must not also open a game or an invite
+  const tap = (fn) => () => {
+    if (hold.fired.current) return (hold.fired.current = false);
+    fn();
+  };
 
   if (m.deleted) {
     return (
@@ -481,13 +568,13 @@ function Bubble({ m, first, last, me, peer }) {
   const tail = last ? (mine ? "rounded-br-md" : "rounded-bl-md") : "";
   return (
     <div className={cn("flex flex-col", mine ? "items-end" : "items-start", first ? "mt-2" : "mt-0.5")}>
-      <div className="relative max-w-[82%]">
+      <div className="relative max-w-[82%] select-none [-webkit-touch-callout:none]" {...hold.handlers}>
         {m.type === "invite" && m.invite ? (
           <button
-            onClick={() => {
+            onClick={tap(() => {
               closePanel();
               navigate(mine ? `/games/battle/${m.invite.code}` : `/games/battle?room=${m.invite.code}`);
-            }}
+            })}
             className={cn("w-60 overflow-hidden rounded-[20px] text-left ring-1 transition active:scale-[.98]", tail, mine ? "bg-signal/15 ring-signal/40" : "bg-white/[.07] ring-white/10")}
           >
             <span className="flex items-center gap-3 px-3.5 pt-3">
@@ -506,23 +593,18 @@ function Bubble({ m, first, last, me, peer }) {
           </button>
         ) : m.type === "game" && m.game && m.stale ? (
           // an earlier turn of a game: a small line, the newest turn is further down
-          <button onClick={() => setGameId(m.game.id)} className="flex items-center gap-1.5 rounded-full bg-white/[.05] px-3 py-1.5 text-[12px] text-mist-500 ring-1 ring-white/[.06] transition hover:text-mist-300">
+          <button onClick={tap(() => setGameId(m.game.id))} className="flex items-center gap-1.5 rounded-full bg-white/[.05] px-3 py-1.5 text-[12px] text-mist-500 ring-1 ring-white/[.06] transition hover:text-mist-300">
             <span>{CHAT_GAMES.find((g) => g.id === m.game.type)?.emoji}</span> {m.game.title} · {mine ? "you played" : `${peer?.name ?? "they"} played`}
           </button>
         ) : m.type === "game" && m.game ? (
           <div className="relative">
-            <button onClick={() => setGameId(m.game.id)} className={cn("block w-60 overflow-hidden rounded-[22px] text-left ring-1 shadow-lg shadow-black/30 transition active:scale-[.98]", tail, "bg-ink-800 ring-white/10")}>
+            <button onClick={tap(() => setGameId(m.game.id))} className={cn("block w-60 overflow-hidden rounded-[22px] text-left ring-1 shadow-lg shadow-black/30 transition active:scale-[.98]", tail, "bg-ink-800 ring-white/10")}>
               <GameCard game={m.game} me={me} peer={peer} />
             </button>
             <ResultBadge game={m.game} me={me} side={mine ? "left" : "right"} />
           </div>
         ) : (
-          <button
-            onClick={() => setActions((a) => !a)}
-            className={cn("block text-left text-[15px] leading-snug break-words whitespace-pre-wrap", "rounded-[20px] px-3.5 py-2", tail, mine ? "bg-signal text-ink-950" : "bg-white/[.09] text-white", m.pending && "opacity-60")}
-          >
-            {m.text}
-          </button>
+          <div className={cn("text-[15px] leading-snug break-words whitespace-pre-wrap transition active:scale-[.97]", "rounded-[20px] px-3.5 py-2", tail, mine ? "bg-signal text-ink-950" : "bg-white/[.09] text-white", m.pending && "opacity-60")}>{m.text}</div>
         )}
         {reacts.length > 0 && (
           <span className={cn("absolute -bottom-3 flex rounded-full bg-ink-800 px-1.5 py-0.5 text-[13px] ring-1 ring-white/15", mine ? "-left-2" : "-right-2")}>
@@ -531,41 +613,56 @@ function Bubble({ m, first, last, me, peer }) {
           </span>
         )}
       </div>
-      {actions && (
-        <div className={cn("mt-1.5 flex items-center gap-1 rounded-full bg-ink-800 px-1.5 py-1 shadow-xl ring-1 ring-white/10", mine ? "self-end" : "self-start")}>
+      {m.edited && <span className={cn("mt-0.5 px-1 text-[10.5px] font-medium text-mist-500", reacts.length > 0 && "mt-3")}>Edited</span>}
+      {reacts.length > 0 && !m.edited && <span className="h-2.5" />}
+    </div>
+  );
+}
+
+/** What opens when you hold a message: reactions on top, the message, then what you can do with it. */
+function MessageMenu({ m, me, peer, onClose, onEdit }) {
+  const { react, unsend } = useChat();
+  const mine = m.from === me;
+  const canEdit = mine && m.type === "text" && Date.now() - m.at < EDIT_WINDOW_MS;
+  const [copied, setCopied] = useState(false);
+  const actions = [
+    m.text && { icon: Copy, label: copied ? "Copied" : "Copy", run: () => (navigator.clipboard?.writeText(m.text), setCopied(true), setTimeout(onClose, 450)) },
+    canEdit && { icon: Pencil, label: "Edit", run: () => onEdit(m) },
+    mine && { icon: Undo2, label: "Unsend", danger: true, run: () => (unsend(m), onClose()) },
+  ].filter(Boolean);
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} onClick={onClose} className="absolute inset-0 z-30 flex flex-col justify-center bg-black/55 px-4 backdrop-blur-md">
+      <motion.div initial={{ scale: 0.92, y: 8 }} animate={{ scale: 1, y: 0 }} transition={{ type: "spring", stiffness: 420, damping: 28 }} onClick={(e) => e.stopPropagation()} className={cn("flex flex-col gap-2", mine ? "items-end" : "items-start")}>
+        <div className="flex items-center gap-0.5 rounded-full bg-ink-800 px-1.5 py-1 shadow-2xl ring-1 ring-white/10">
           {REACTIONS.map((e) => (
             <button
               key={e}
               onClick={() => {
                 react(m, e);
-                setActions(false);
+                onClose();
               }}
-              className={cn("grid size-8 place-items-center rounded-full text-base transition hover:bg-white/10", m.reactions?.[me] === e && "bg-signal/25")}
+              className={cn("grid size-10 place-items-center rounded-full text-xl transition hover:scale-110 hover:bg-white/10", m.reactions?.[me] === e && "bg-signal/25")}
             >
               {e}
             </button>
           ))}
-          {m.text && (
-            <button onClick={() => (navigator.clipboard?.writeText(m.text), setActions(false))} aria-label="Copy" className="grid size-8 place-items-center rounded-full text-mist-300 transition hover:bg-white/10">
-              <Copy className="size-4" />
-            </button>
-          )}
-          {mine && (
-            <button
-              onClick={() => {
-                unsend(m);
-                setActions(false);
-              }}
-              aria-label="Unsend"
-              className="grid size-8 place-items-center rounded-full text-live transition hover:bg-white/10"
-            >
-              <Undo2 className="size-4" />
-            </button>
-          )}
         </div>
-      )}
-      {reacts.length > 0 && <span className="h-2.5" />}
-    </div>
+        <div className={cn("max-h-40 max-w-[82%] overflow-hidden rounded-[20px] px-3.5 py-2 text-[15px] leading-snug break-words whitespace-pre-wrap shadow-2xl", mine ? "bg-signal text-ink-950" : "bg-white/[.12] text-white")}>
+          {m.type === "text" ? m.text : m.type === "invite" ? `⚔️ ${m.invite?.title} · ${m.invite?.code}` : `${CHAT_GAMES.find((g) => g.id === m.game?.type)?.emoji ?? "🎮"} ${m.game?.title ?? "Game"}`}
+        </div>
+        {actions.length > 0 && (
+          <div className="w-48 overflow-hidden rounded-2xl bg-ink-800 shadow-2xl ring-1 ring-white/10">
+            {actions.map((a, i) => (
+              <button key={a.label} onClick={a.run} className={cn("flex w-full items-center justify-between px-4 py-3 text-left text-[15px] transition hover:bg-white/[.06]", i > 0 && "border-t border-white/[.06]", a.danger && "text-live")}>
+                {a.label}
+                <a.icon className="size-4" />
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="text-[11px] text-white/50">{new Date(m.at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}{mine ? "" : ` · ${peer?.name ?? ""}`}</p>
+      </motion.div>
+    </motion.div>
   );
 }
 
