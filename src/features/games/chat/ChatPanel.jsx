@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { useChat } from "./ChatProvider";
 import { CHAT_GAMES, gameCardLine } from "./gameInfo";
 import { useScrollLock } from "./useScrollLock";
+import { useVisualViewport } from "./useVisualViewport";
 import { cardOf as whotCardOf, WhotCard } from "./Whot";
 
 /*
@@ -69,6 +70,9 @@ export function ChatLauncher() {
 export function ChatPanel() {
   const { open, view, closePanel, gameId } = useChat();
   useScrollLock(open && !gameId); // full screen on phones: only the messages scroll
+  // Follow the part of the screen above the keyboard, so the message box sits right on the keyboard.
+  const vv = useVisualViewport(open && !gameId);
+  const keyboardUp = vv && vv.height < window.innerHeight - 120;
   return (
     <AnimatePresence>
       {open && !gameId && (
@@ -79,6 +83,7 @@ export function ChatPanel() {
           exit={{ y: 60, opacity: 0 }}
           transition={{ type: "spring", stiffness: 340, damping: 32 }}
           className="fixed inset-0 z-[110] flex h-[100dvh] flex-col overflow-hidden bg-ink-900 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-black/70 lg:inset-auto lg:right-6 lg:bottom-6 lg:h-[620px] lg:w-[400px] lg:rounded-3xl lg:pt-0 lg:pb-0 lg:ring-1 lg:ring-white/10"
+          style={vv ? { height: vv.height, top: vv.top, bottom: "auto", paddingBottom: keyboardUp ? 0 : undefined } : undefined}
           role="dialog"
           aria-label="Messages"
         >
@@ -225,6 +230,15 @@ function Thread() {
     if (stick.current || thread.messages.length > lastCount.current + 0) el.scrollTop = stick.current ? el.scrollHeight : el.scrollTop;
     lastCount.current = thread.messages.length;
   }, [thread.messages, thread.typing]);
+
+  // When the keyboard opens the conversation gets shorter: keep the newest message in sight.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const keep = () => stick.current && scroller.current && (scroller.current.scrollTop = scroller.current.scrollHeight);
+    vv.addEventListener("resize", keep);
+    return () => vv.removeEventListener("resize", keep);
+  }, []);
 
   // A battle invite shared from the waiting room is sent once this conversation is open.
   useEffect(() => {
@@ -490,7 +504,11 @@ function Thread() {
               autoComplete="off"
               className="h-9 min-w-0 flex-1 rounded-full bg-white/[.06] px-4 text-[15px] ring-1 ring-white/10 outline-none placeholder:text-mist-700 focus:ring-signal/50"
             />
-            <button type="submit" disabled={!text.trim()} aria-label={editing ? "Save edit" : "Send"} className="grid size-9 shrink-0 place-items-center rounded-full bg-signal text-ink-950 transition disabled:bg-white/[.08] disabled:text-mist-700">
+            <button
+              type="submit"
+              onPointerDown={(e) => e.preventDefault()} // keep the keyboard open after sending, like WhatsApp
+              disabled={!text.trim()}
+              aria-label={editing ? "Save edit" : "Send"} className="grid size-9 shrink-0 place-items-center rounded-full bg-signal text-ink-950 transition disabled:bg-white/[.08] disabled:text-mist-700">
               {editing ? <Check className="size-[18px]" strokeWidth={3} /> : <Send className="size-[17px]" />}
             </button>
           </form>
