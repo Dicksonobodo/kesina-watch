@@ -15,6 +15,9 @@ import { GameArt } from "@/features/games/art";
  * the line-up as a picture.
  */
 
+// Optional position tags a player can be given (tap a player to pick one).
+export const POSITIONS = ["GK", "RB", "CB", "LB", "RWB", "LWB", "CDM", "CM", "CAM", "RM", "LM", "RW", "LW", "SS", "CF", "ST"];
+
 export const FORMATIONS = ["4-3-3", "4-4-2", "4-2-3-1", "4-1-4-1", "4-4-1-1", "4-3-2-1", "4-1-2-1-2", "4-5-1", "4-2-2-2", "3-5-2", "3-4-3", "3-4-2-1", "5-3-2", "5-4-1"];
 const KITS = [
   ["#c6ff3d", "#0a0a0f"], ["#e11d48", "#ffffff"], ["#2563eb", "#ffffff"], ["#f8fafc", "#111827"], ["#facc15", "#111827"], ["#16a34a", "#ffffff"], ["#111827", "#facc15"], ["#7c3aed", "#ffffff"], ["#f97316", "#111827"], ["#0ea5e9", "#0a0a0f"],
@@ -137,11 +140,13 @@ export function LineupEditor() {
   /* dragging a player: a short press without moving opens the name editor */
   function down(e, i) {
     if (!mine) return;
-    e.preventDefault();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      /* fine */
+    if (hand) {
+      e.preventDefault();
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* fine */
+      }
     }
     drag.current = { i, x: e.clientX, y: e.clientY, moved: false, tapOnly: !hand };
   }
@@ -256,16 +261,17 @@ export function LineupEditor() {
           </div>
           {hand && <p className="mt-2 rounded-2xl bg-signal/10 px-3.5 py-2 text-[13px] text-signal ring-1 ring-signal/30">Drag any player to a new spot to make your own shape. Tap Done moving when you're happy.</p>}
 
-          <div ref={pitch} onPointerMove={move} onPointerUp={up} onPointerCancel={up} className={cn("relative mx-auto mt-4 aspect-[68/100] w-full max-w-[min(100%,62vh)] touch-none overflow-hidden rounded-3xl transition select-none", hand && "ring-4 ring-signal/70")} style={{ background: "repeating-linear-gradient(180deg,#15803d 0 10%,#16a34a 10% 20%)" }}>
+          <div ref={pitch} onPointerMove={move} onPointerUp={up} onPointerCancel={() => (drag.current = null)} className={cn("relative mx-auto mt-4 aspect-[68/100] w-full max-w-[min(100%,62vh)] overflow-hidden rounded-3xl transition select-none", hand ? "touch-none ring-4 ring-signal/70" : "touch-pan-y")} style={{ background: "repeating-linear-gradient(180deg,#15803d 0 10%,#16a34a 10% 20%)" }}>
             <PitchLines />
             {lineup.players.map((p, i) => (
               <button
                 key={i}
                 onPointerDown={(e) => down(e, i)}
-                className={cn("absolute flex -translate-x-1/2 -translate-y-1/2 touch-none flex-col items-center [-webkit-touch-callout:none]", mine && hand ? "cursor-grab active:cursor-grabbing" : mine ? "cursor-pointer" : "cursor-default")}
+                className={cn("absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center [-webkit-touch-callout:none]", hand ? "touch-none" : "touch-pan-y", mine && hand ? "cursor-grab active:cursor-grabbing" : mine ? "cursor-pointer" : "cursor-default")}
                 style={{ left: `${p.x}%`, top: `${p.y}%` }}
-                aria-label={`${p.name}, number ${p.number}`}
+                aria-label={`${p.name}, number ${p.number}${p.pos ? `, ${p.pos}` : ""}`}
               >
+                {p.pos && <span className="absolute -top-4 left-1/2 -translate-x-1/2 rounded bg-white px-1 font-mono text-[9px] leading-[14px] font-bold text-ink-950 shadow">{p.pos}</span>}
                 <span className={cn("grid size-10 place-items-center rounded-full font-display text-[15px] font-extrabold shadow-[0_4px_10px_rgba(0,0,0,.45)] ring-2 ring-white/80 sm:size-11", hand && "animate-pulse ring-4")} style={{ background: i === 0 ? "#f59e0b" : kit.shirt, color: i === 0 ? "#111827" : kit.text }}>
                   {p.number}
                 </span>
@@ -404,6 +410,19 @@ function PlayerSheet({ player, keeper, onClose, onChange }) {
           <input value={player.number} inputMode="numeric" onChange={(e) => onChange({ number: Number(e.target.value.replace(/\D/g, "").slice(0, 2)) || "" })} aria-label="Shirt number" className="h-12 w-16 rounded-2xl bg-white/[.05] text-center font-display text-xl font-bold ring-1 ring-white/10 outline-none focus:ring-signal/50" />
           <input value={player.name} onChange={(e) => onChange({ name: e.target.value.slice(0, 24) })} autoFocus aria-label="Name" placeholder="Name" className="h-12 min-w-0 flex-1 rounded-2xl bg-white/[.05] px-4 text-[15px] ring-1 ring-white/10 outline-none focus:ring-signal/50" />
         </div>
+        <p className="mt-4 text-xs font-semibold text-mist-300">
+          Position <span className="font-normal text-mist-500">(optional)</span>
+        </p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <button type="button" onClick={() => onChange({ pos: "" })} className={cn("rounded-lg px-2.5 py-1.5 text-xs font-semibold ring-1 transition", !player.pos ? "bg-white/15 text-white ring-white/30" : "bg-white/[.04] text-mist-500 ring-white/10")}>
+            None
+          </button>
+          {POSITIONS.map((pos) => (
+            <button type="button" key={pos} onClick={() => onChange({ pos })} className={cn("rounded-lg px-2.5 py-1.5 font-mono text-xs font-bold ring-1 transition", player.pos === pos ? "bg-signal text-ink-950 ring-signal" : "bg-white/[.04] text-mist-300 ring-white/10 hover:bg-white/[.08]")}>
+              {pos}
+            </button>
+          ))}
+        </div>
         <Button type="submit" className="mt-4 w-full">
           Done
         </Button>
@@ -494,6 +513,14 @@ function downloadLineup(l) {
     g.fillRect(cx - tw / 2, cy + 48, tw, 38);
     g.fillStyle = "#fff";
     g.fillText(p.name, cx, cy + 68);
+    if (p.pos) {
+      g.font = "800 22px ui-monospace, monospace";
+      const pw2 = g.measureText(p.pos).width + 14;
+      g.fillStyle = "#fff";
+      g.fillRect(cx - pw2 / 2, cy - 78, pw2, 28);
+      g.fillStyle = "#0a0a0f";
+      g.fillText(p.pos, cx, cy - 63);
+    }
     g.textAlign = "left";
     g.textBaseline = "alphabetic";
   });
