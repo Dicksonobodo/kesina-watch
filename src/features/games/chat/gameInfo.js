@@ -1,6 +1,7 @@
 /* What the chat knows about the games you can play in a conversation. */
 
 export const CHAT_GAMES = [
+  { id: "shootout", title: "Shootout", blurb: "Mind games from the spot. Shoot, then keep.", emoji: "🥅", color: "linear-gradient(135deg,#15803d,#0ea5e9)", table: "radial-gradient(120% 70% at 50% 0%, #14532d 0%, #0a2016 50%, #05070d 100%)" },
   { id: "swipe", title: "Word Swipe", blurb: "Swipe letters into words. 80 seconds.", emoji: "🔤", color: "linear-gradient(135deg,#1d4ed8,#0ea5e9)", table: "radial-gradient(120% 80% at 50% 0%, #1e3a8a 0%, #0b1226 60%, #070a14 100%)" },
   { id: "whot", title: "Naija Whot", blurb: "The classic card game. Empty your hand first.", emoji: "🃏", color: "linear-gradient(135deg,#b91c1c,#f97316)", table: "radial-gradient(120% 75% at 50% 35%, #15803d 0%, #0b4d25 55%, #04200f 100%)" },
   { id: "behind", title: "Who's Behind You?", blurb: "Pick a footballer for them, guess your own.", emoji: "🕵️", color: "linear-gradient(135deg,#7c3aed,#db2777)", table: "radial-gradient(120% 80% at 50% 0%, #4c1d95 0%, #1e1035 60%, #0b0716 100%)" },
@@ -16,6 +17,10 @@ export function gameCardLine(game, me, peerName = "They") {
     if (game.winner === "draw") return { text: "It's a draw", cta: "View", result: "draw" };
     const won = game.winner === me;
     let detail = "";
+    if (game.type === "shootout" && game.goals) {
+      const other = Object.keys(game.goals).find((u) => u !== me);
+      detail = `${game.goals[me] ?? 0}–${game.goals[other] ?? 0} on penalties`;
+    }
     if (game.type === "swipe" && game.scores) {
       const other = Object.keys(game.scores).find((u) => u !== me);
       detail = `${fmt(game.scores[me])} to ${fmt(game.scores[other])}`;

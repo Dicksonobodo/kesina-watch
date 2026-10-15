@@ -27,6 +27,7 @@ const HigherLower = page(() => import("@/features/games/HigherLower"), "HigherLo
 const Footle = page(() => import("@/features/games/Footle"), "Footle");
 const ClubGrid = page(() => import("@/features/games/ClubGrid"), "ClubGrid");
 const Keepy = page(() => import("@/features/games/Keepy"), "Keepy");
+const Shootout = page(() => import("@/features/games/Shootout"), "Shootout");
 const Tournaments = page(() => import("@/features/create/Tournaments"), "Tournaments");
 const TournamentView = page(() => import("@/features/create/Tournaments"), "TournamentView");
 const Lineups = page(() => import("@/features/create/Lineups"), "Lineups");
@@ -71,6 +72,7 @@ export default function App() {
                           <Route path="footle" element={<Footle />} />
                           <Route path="grid" element={<ClubGrid />} />
                           <Route path="keepy" element={<Keepy />} />
+                          <Route path="shootout" element={<Shootout />} />
                           <Route path="tournaments" element={<Tournaments />} />
                           <Route path="tournaments/:id" element={<TournamentView />} />
                           <Route path="lineups" element={<Lineups />} />

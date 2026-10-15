@@ -6,6 +6,7 @@ import * as whot from "./cg/whot.js";
 import * as darts from "./cg/darts.js";
 import * as behind from "./cg/behind.js";
 import * as ttt from "./cg/ttt.js";
+import * as shootout from "./cg/shootout.js";
 import { dayKey, GameError, newId, rateLimit } from "./util.js";
 
 /*
@@ -14,7 +15,7 @@ import { dayKey, GameError, newId, rateLimit } from "./util.js";
  * through `cg.get`, which sends each player what they are allowed to see.
  */
 
-const GAMES = { swipe, whot, darts, behind, ttt };
+const GAMES = { swipe, whot, darts, behind, ttt, shootout };
 const MAX_REWARDED_PER_DAY = 8; // so two friends can't farm XP by playing all day
 
 const path = (id) => `cgames/${id}`;
@@ -131,7 +132,7 @@ export async function moveGame(identity, id, body) {
       } else if (g.msgId) await touchGame(g.chatId, g.msgId, cardOf(g));
     };
     const [rewardsByUid] = await Promise.all([done ? rewards(g) : null, deliverToChat().catch(() => {})]);
-    return { game: viewOf(g, identity.uid), result: { dart: result.dart ?? null, bust: Boolean(result.bust) }, sent: handoff, reward: rewardsByUid?.[identity.uid] ?? null };
+    return { game: viewOf(g, identity.uid), result: { dart: result.dart ?? null, bust: Boolean(result.bust), kick: result.kick ?? null }, sent: handoff, reward: rewardsByUid?.[identity.uid] ?? null };
   }
   throw new GameError("That took too long. Try again.", 409);
 }

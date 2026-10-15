@@ -333,6 +333,27 @@ const ARTS = {
       </>
     ),
   },
+  shootout: {
+    bg: "from-emerald-900 via-green-950 to-ink-950",
+    svg: (
+      <>
+        <g stroke="#fff" strokeOpacity=".18" strokeWidth="1">
+          {Array.from({ length: 15 }).map((_, i) => (
+            <line key={`v${i}`} x1={90 + i * 10} y1="30" x2={90 + i * 10} y2="100" />
+          ))}
+          {Array.from({ length: 7 }).map((_, i) => (
+            <line key={`h${i}`} x1="90" y1={30 + i * 11.6} x2="230" y2={30 + i * 11.6} />
+          ))}
+        </g>
+        <path d="M80 108 V22 H240 V108" fill="none" stroke="#fff" strokeWidth="6" strokeLinejoin="round" />
+        <path d="M160 150 Q190 70 214 46" fill="none" stroke={SIGNAL} strokeWidth="3" strokeDasharray="2 8" strokeLinecap="round" />
+        <circle cx="214" cy="46" r="13" fill="none" stroke={SIGNAL} strokeWidth="3" />
+        <circle cx="160" cy="146" r="9" fill="#fff" />
+        <path d="M118 96 l-26 -14 M118 96 l-20 6" stroke="#f59e0b" strokeWidth="9" strokeLinecap="round" />
+        <circle cx="122" cy="94" r="8" fill="#f59e0b" />
+      </>
+    ),
+  },
   tourney: {
     bg: "from-amber-800 via-yellow-950 to-ink-950",
     svg: (

@@ -14,6 +14,8 @@ import { useGames } from "./GamesProvider";
 import { GameArt } from "./art";
 import { QuestionMeta } from "./QuizGame";
 import { Card, ErrorNote, Eyebrow, OptionButton, PlayerChip } from "./ui";
+import { ShootoutRoom } from "./shootout/ShootoutRoom";
+import { squadPayload, SquadPicker, useSavedSquad } from "./shootout/SquadPicker";
 
 /*
  * Head-to-head battles. Both players watch the same room: with a real database it updates live
@@ -25,6 +27,7 @@ import { Card, ErrorNote, Eyebrow, OptionButton, PlayerChip } from "./ui";
 
 // What can be played head to head.
 const BATTLE_GAMES = [
+  { id: "shootout", title: "Mind Games: Shootout", desc: "Shoot and keep, live", art: "shootout" },
   { id: "quiz", title: "Football IQ quiz", desc: "Mixed football trivia", art: "quiz", levels: true },
   { id: "shirt", title: "Shirt numbers", desc: "Which number does he wear?", art: "shirt" },
   { id: "clubs", title: "Who played for both?", desc: "Two clubs, one player", art: "clubs" },
@@ -40,7 +43,8 @@ export function BattleLobby() {
   const { profile, toast } = useGames();
   const chat = useChat();
   const [difficulty, setDifficulty] = useState("mixed");
-  const [kind, setKind] = useState("quiz");
+  const [kind, setKind] = useState(() => (BATTLE_GAMES.some((g) => g.id === params.get("kind")) ? params.get("kind") : "quiz"));
+  const [squad, setSquad] = useSavedSquad();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -55,7 +59,7 @@ export function BattleLobby() {
     setBusy(what);
     setError("");
     try {
-      const room = await gamesApi(action, body);
+      const room = await gamesApi(action, { ...body, squad: squadPayload(squad) }); // the squad only matters for the shootout
       navigate(`/games/battle/${room.code}`);
     } catch (err) {
       setError(err.message);
@@ -71,7 +75,7 @@ export function BattleLobby() {
       <GameArt id="battle" fit="meet" className="mb-5 h-32 rounded-3xl ring-1 ring-white/10" />
       <div>
         <h1 className="font-display text-3xl font-extrabold tracking-tight">Head-to-Head</h1>
-        <p className="text-sm text-mist-500">Same 10 questions, same clock. Faster answers score more.</p>
+        <p className="text-sm text-mist-500">{kind === "shootout" ? "A live penalty shootout: you shoot, they keep, then swap. Both pick at the same time." : "Same 10 questions, same clock. Faster answers score more."}</p>
       </div>
 
       {invite && (
@@ -102,6 +106,12 @@ export function BattleLobby() {
           </button>
         ))}
       </div>
+
+      {kind === "shootout" && (
+        <div className="mt-3">
+          <SquadPicker value={squad} onChange={setSquad} />
+        </div>
+      )}
 
       {BATTLE_GAMES.find((g) => g.id === kind)?.levels && (
         <div className="mt-3 grid grid-cols-4 gap-2">
@@ -382,6 +392,8 @@ export function BattleRoom() {
   }
 
   if (!me) return <ErrorNote>You're not part of this battle.</ErrorNote>;
+
+  if (room.kind === "shootout") return <ShootoutRoom room={room} myId={myId} now={now} skew={skew.current} apply={apply} />;
 
   /* finished */
   if (room.status === "done") {

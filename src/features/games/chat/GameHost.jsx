@@ -16,7 +16,8 @@ const Whot = lazy(() => import("./Whot"));
 const Darts = lazy(() => import("./Darts"));
 const Behind = lazy(() => import("./Behind"));
 const TicTacToe = lazy(() => import("./TicTacToe"));
-const SCREENS = { swipe: WordSwipe, whot: Whot, darts: Darts, behind: Behind, ttt: TicTacToe };
+const Shootout = lazy(() => import("./Shootout"));
+const SCREENS = { swipe: WordSwipe, whot: Whot, darts: Darts, behind: Behind, ttt: TicTacToe, shootout: Shootout };
 
 /*
  * A chat game, opened like an iMessage game: a sheet that slides up over the conversation, with

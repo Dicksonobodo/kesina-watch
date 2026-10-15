@@ -1,5 +1,6 @@
 // Photographers behind the pictures in public/games/ and public/home/ (Unsplash License: free to use, credit is optional but kind).
 export const PHOTO_CREDITS = {
+  shootout: { photographer: "Lars Bo Nielsen", profile: "https://unsplash.com/@lbnielsen", page: "https://unsplash.com/photos/man-in-yellow-long-sleeve-shirt-and-yellow-pants-playing-soccer-Wu7hYE7Lzzs" },
   tourney: { photographer: "sammy swae", profile: "https://unsplash.com/@sammyswae", page: "https://unsplash.com/photos/soccer-team-celebrating-championship-victory-cneBYhGBUtM" },
   lineup: { photographer: "Manuel Navarro", profile: "https://unsplash.com/@momentista", page: "https://unsplash.com/photos/soccer-player-during-daytime-V4G9k-ev8q0" },
   hilo: { photographer: "Homer Lopez", profile: "https://unsplash.com/@homerlopez", page: "https://unsplash.com/photos/man-wearing-black-polo-shirt-holding-led-signage---7zuwOPAFQ" },

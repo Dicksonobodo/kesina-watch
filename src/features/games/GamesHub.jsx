@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowUpDown, Brain, CalendarCheck, Coins, Crown, Flame, Footprints, Grid3x3, Handshake, LayoutGrid, MessageCircle, Medal, PenLine, Route, Search, Shirt, Spline, Swords, Target, Trophy, UserSearch } from "lucide-react";
+import { ArrowUpDown, Brain, CalendarCheck, Coins, Crown, Flame, Footprints, Goal, Grid3x3, Handshake, LayoutGrid, MessageCircle, Medal, PenLine, Route, Search, Shirt, Spline, Swords, Target, Trophy, UserSearch } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { cn } from "@/lib/cn";
 import { StatChip, useGames, XpBar } from "./GamesProvider";
@@ -11,6 +11,7 @@ import { useChat } from "./chat/ChatProvider";
 import { ErrorNote, Eyebrow, PlayerChip } from "./ui";
 
 export const GAMES = [
+  { id: "shootout", to: "/games/shootout", title: "Mind Games: Shootout", desc: "Shoot and keep with real players. Pick a side, beat the keeper, then sudden death.", icon: Goal, tag: "New" },
   { id: "hilo", to: "/games/hilo", title: "Higher or Lower", desc: "Who has more goals this season? One wrong answer ends your streak.", icon: ArrowUpDown, tag: "Streaks" },
   { id: "footle", to: "/games/footle", title: "Footle", desc: "Guess the footballer in 8 tries. Every guess shows how close you are.", icon: Spline, tag: "Daily" },
   { id: "grid", to: "/games/grid", title: "Club Grid", desc: "Fill 9 squares with players who wore both clubs' shirts.", icon: Grid3x3, tag: "Daily" },
@@ -67,7 +68,7 @@ export function GamesHub() {
             <span className="size-1.5 animate-pulse rounded-full bg-rose-400" /> Multiplayer
           </span>
           <h2 className="mt-3 font-display text-2xl leading-tight font-extrabold tracking-tight sm:text-3xl">Head-to-Head</h2>
-          <p className="mt-1.5 max-w-md text-sm text-mist-300">Play a friend or someone at your level: 7 football battles, plus Tic Tac Toe, Word Swipe, Naija Whot, Darts and Who's Behind You? in the chat.</p>
+          <p className="mt-1.5 max-w-md text-sm text-mist-300">Play a friend or someone at your level: a live penalty Shootout and 7 football battles, plus Tic Tac Toe, Word Swipe, Naija Whot, Darts and Who's Behind You? in the chat.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link to="/games/battle" className="inline-flex h-11 items-center gap-2 rounded-full bg-signal px-5 text-sm font-bold text-ink-950 transition hover:brightness-110">
               <Swords className="size-4" /> Start a battle

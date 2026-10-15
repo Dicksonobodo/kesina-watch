@@ -802,6 +802,43 @@ function GamePreview({ game, me, peer }) {
       </>
     );
   }
+  if (game.type === "shootout") {
+    const goals = game.goals ?? {};
+    const marks = game.marks ?? {};
+    const order = game.order ?? [me, other(goals)];
+    return (
+      <>
+        <svg viewBox="0 0 200 104" className="absolute top-2 left-1/2 w-44 -translate-x-1/2">
+          <g stroke="#fff" strokeOpacity=".22" strokeWidth=".8">
+            {Array.from({ length: 13 }).map((_, i) => (
+              <line key={`v${i}`} x1={40 + i * 10} y1="22" x2={40 + i * 10} y2="80" />
+            ))}
+            {Array.from({ length: 6 }).map((_, i) => (
+              <line key={`h${i}`} x1="40" y1={22 + i * 11.6} x2="160" y2={22 + i * 11.6} />
+            ))}
+          </g>
+          <path d="M30 86 V14 H170 V86" fill="none" stroke="#f8fafc" strokeWidth="5" strokeLinejoin="round" />
+          <line x1="0" y1="88" x2="200" y2="88" stroke="#fff" strokeOpacity=".5" strokeWidth="1.5" />
+          <circle cx="132" cy="38" r="7" fill="#fff" />
+          <path d="M132 33.5l3.4 2.5-1.3 4h-4.2l-1.3-4z" fill="#111827" />
+        </svg>
+        <span className="absolute inset-x-2 bottom-2 flex flex-col gap-1">
+          {order.map((uid) => (
+            <span key={uid} className="flex items-center gap-1.5 rounded-full bg-black/65 py-0.5 pr-2 pl-2.5 backdrop-blur">
+              <span className="w-14 shrink-0 truncate text-[10px] font-semibold">{uid === me ? "You" : peer?.name ?? "Them"}</span>
+              <span className="flex min-w-0 flex-1 gap-0.5 overflow-hidden">
+                {Array.from({ length: Math.max(5, (marks[uid] ?? []).length) }).map((_, i) => {
+                  const m = (marks[uid] ?? [])[i];
+                  return <span key={i} className={cn("size-2.5 shrink-0 rounded-full", m === 1 ? "bg-signal" : m === 0 ? "bg-rose-500" : "border border-white/35")} />;
+                })}
+              </span>
+              <span className="font-display text-sm leading-none font-extrabold tabular-nums">{goals[uid] ?? 0}</span>
+            </span>
+          ))}
+        </span>
+      </>
+    );
+  }
   if (game.type === "behind") {
     const score = game.score ?? {};
     return (

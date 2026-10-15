@@ -2,6 +2,7 @@ import { KINDS, questionsFor } from "./sessions.js";
 import { getStore, inc } from "./store.js";
 import { award, getProfile, levelFor } from "./profile.js";
 import { dayKey, GameError, rateLimit } from "./util.js";
+import { addKick, kickAt, lateShot, newShootout, shotFrom, squadFrom, tally, ZONES } from "./shootout.js";
 
 /*
  * Head-to-head battles: two players, the same 10 questions, speed counts.
@@ -14,7 +15,13 @@ import { dayKey, GameError, rateLimit } from "./util.js";
  */
 
 // What can be played head to head (same builders as the solo games). "daily" is solo only.
-export const BATTLE_KINDS = ["quiz", "shirt", "clubs", "trophy", "xi", "career", "hilo"];
+export const BATTLE_KINDS = ["quiz", "shirt", "clubs", "trophy", "xi", "career", "hilo", "shootout"];
+// Mind Games: Shootout is played live here too: both players act on the same kick at the same
+// time (one shoots, one picks a side), against a clock. The room shows only finished kicks; the
+// shot and the dive wait in rooms_secret until both are in.
+const SHOOTOUT = { title: "Mind Games: Shootout", seconds: 15, revealMs: 5200 };
+const titleOf = (kind) => (kind === "shootout" ? SHOOTOUT.title : KINDS[kind].title);
+const secondsOf = (kind) => (kind === "shootout" ? SHOOTOUT.seconds : KINDS[kind].seconds);
 const COUNTDOWN_MS = 3500; // before the first question
 const REVEAL_MS = 3000; // pause between questions to show the answer
 const GRACE_MS = 2500;
@@ -46,12 +53,13 @@ function memberOnly(room, uid) {
 
 const kindOf = (kind) => (BATTLE_KINDS.includes(kind) ? kind : "quiz");
 
-export async function createRoom(identity, { difficulty = "mixed", isPublic = false, kind = "quiz" } = {}) {
+export async function createRoom(identity, { difficulty = "mixed", isPublic = false, kind = "quiz", squad = null } = {}) {
   rateLimit(`room:${identity.uid}`, 10);
   kind = kindOf(kind);
   const store = await getStore();
   const code = await freshCode(store);
   const me = await playerEntry(identity);
+  if (kind === "shootout") me.squad = await squadFrom(squad);
   const room = {
     code,
     host: identity.uid,
@@ -61,11 +69,11 @@ export async function createRoom(identity, { difficulty = "mixed", isPublic = fa
     public: Boolean(isPublic),
     difficulty,
     kind,
-    title: KINDS[kind].title,
+    title: titleOf(kind),
     hostLevel: me.level,
     qs: [],
     idx: 0,
-    seconds: KINDS[kind].seconds,
+    seconds: secondsOf(kind),
     qStartedAt: 0,
     lastAnswered: {},
     reveals: [],
@@ -77,7 +85,7 @@ export async function createRoom(identity, { difficulty = "mixed", isPublic = fa
   return room;
 }
 
-export async function joinRoom(identity, code) {
+export async function joinRoom(identity, code, squad = null) {
   rateLimit(`join:${identity.uid}`, 20);
   const store = await getStore();
   const id = String(code ?? "").toUpperCase().trim();
@@ -88,6 +96,13 @@ export async function joinRoom(identity, code) {
 
   const me = await playerEntry(identity);
   const kind = kindOf(room.kind);
+  if (kind === "shootout") {
+    me.squad = await squadFrom(squad);
+    const next = { memberIds: [...room.memberIds, identity.uid], [`players.${identity.uid}`]: me, status: "playing", idx: 0, qStartedAt: Date.now() + COUNTDOWN_MS, startedAt: Date.now(), lastAnswered: {}, so: newShootout([room.host, identity.uid]) };
+    await store.set(`rooms_secret/${id}`, { picks: {} });
+    await store.update(`rooms/${id}`, next);
+    return { ...room, ...next, players: { ...room.players, [identity.uid]: me } };
+  }
   const qs = await questionsFor(kind, { difficulty: room.difficulty, seed: kind === "xi" ? dayKey() : null });
   if (!qs.length) throw new GameError("Couldn't build that game right now. Try another one, or try again in a minute.", 503);
   const startsAt = Date.now() + COUNTDOWN_MS;
@@ -115,7 +130,7 @@ export async function getRoom(identity, code) {
 
 /* ---------- quick match: pair with someone of a similar level ---------- */
 
-export async function quickMatch(identity, { difficulty = "mixed", kind = "quiz" } = {}) {
+export async function quickMatch(identity, { difficulty = "mixed", kind = "quiz", squad = null } = {}) {
   rateLimit(`quick:${identity.uid}`, 12);
   kind = kindOf(kind);
   const store = await getStore();
@@ -128,16 +143,16 @@ export async function quickMatch(identity, { difficulty = "mixed", kind = "quiz"
     .map((r) => ({ r, gap: Math.abs(r.hostLevel - me.level), waited: Date.now() - r.createdAt }))
     .filter((x) => x.gap <= 2 + Math.floor(x.waited / 10_000))
     .sort((a, b) => a.gap - b.gap || a.r.createdAt - b.r.createdAt);
-  if (fits.length) return joinRoom(identity, fits[0].r.code);
+  if (fits.length) return joinRoom(identity, fits[0].r.code, squad);
 
-  const room = await createRoom(identity, { difficulty, isPublic: true, kind });
+  const room = await createRoom(identity, { difficulty, isPublic: true, kind, squad });
   // Two people searching at the same moment: the later room joins the earlier one.
   const rivals = (await store.list("rooms", { where: [["status", "==", "waiting"], ["public", "==", true]], limit: 25 })).filter(
     (r) => r.code !== room.code && !r.memberIds.includes(identity.uid) && kindOf(r.kind) === kind && r.createdAt <= room.createdAt && Math.abs(r.hostLevel - me.level) <= 3,
   );
   if (rivals.length) {
     await store.delete(`rooms/${room.code}`);
-    return joinRoom(identity, rivals.sort((a, b) => a.createdAt - b.createdAt)[0].code);
+    return joinRoom(identity, rivals.sort((a, b) => a.createdAt - b.createdAt)[0].code, squad);
   }
   return room;
 }
@@ -193,6 +208,7 @@ export async function tickRoom(identity, code) {
   memberOnly(room, identity.uid);
   if (room.status !== "playing") return room;
   if (Date.now() < room.qStartedAt + room.seconds * 1000 + GRACE_MS) return room;
+  if (room.kind === "shootout") return closeKick(store, id, room.idx);
   const secret = await store.get(`rooms_secret/${id}`);
   return closeQuestion(store, id, secret.answers[room.idx], room.idx);
 }
@@ -239,6 +255,69 @@ async function closeQuestion(store, id, answer, index) {
   return next;
 }
 
+/* ---------- the shootout, live ---------- */
+
+/** A shot (the shooter) or a side (the keeper) for the kick that's on. */
+export async function kickRoom(identity, code, body) {
+  const store = await getStore();
+  const id = String(code).toUpperCase();
+  const room = await store.get(`rooms/${id}`);
+  memberOnly(room, identity.uid);
+  if (room.kind !== "shootout") throw new GameError("This room isn't a shootout.");
+  if (room.status !== "playing") throw new GameError("This shootout isn't running.");
+  const k = room.idx;
+  if (Number(body.k) !== k) return room; // too late: that kick has been taken
+  if (room.lastAnswered?.[identity.uid] === k) return room;
+  if (Date.now() < room.qStartedAt - 1500) throw new GameError("Wait for the kick to start.");
+  const info = kickAt(room.so.order, k);
+  let field;
+  if (info.shooter === identity.uid) field = { [`picks.${k}.shot`]: shotFrom(body.shot, info.yards) };
+  else {
+    if (!ZONES.includes(body.zone)) throw new GameError("Pick a side to dive.");
+    field = { [`picks.${k}.dive`]: body.zone };
+  }
+  // Each player writes only their own field, so a shot and a dive at the same moment can't clash.
+  await store.set(`rooms_secret/${id}`, field, { merge: true });
+  await store.update(`rooms/${id}`, { [`lastAnswered.${identity.uid}`]: k });
+  const picks = (await store.get(`rooms_secret/${id}`))?.picks?.[k] ?? {};
+  if (picks.shot && picks.dive) return closeKick(store, id, k);
+  return store.get(`rooms/${id}`);
+}
+
+// Takes kick k: both choices are in, or the clock ran out (a rushed shot / a guessed side). Like
+// closeQuestion, only one caller can win the compare-and-set, so a kick is never counted twice.
+async function closeKick(store, id, k) {
+  const room = await store.get(`rooms/${id}`);
+  if (room.status !== "playing" || room.idx !== k) return room;
+  const picks = (await store.get(`rooms_secret/${id}`))?.picks?.[k] ?? {};
+  const so = structuredClone(room.so);
+  const info = kickAt(so.order, k);
+  const shot = picks.shot ?? lateShot(info.yards);
+  const dive = picks.dive ?? ZONES[Math.floor(Math.random() * 3)];
+  const { winner } = addKick(so, shot, dive, { late: !picks.shot ? "shot" : !picks.dive ? "dive" : null });
+  const players = structuredClone(room.players);
+  const { goals } = tally(so);
+  const update = { so };
+  for (const uid of room.memberIds) {
+    const acted = uid === info.shooter ? Boolean(picks.shot) : Boolean(picks.dive);
+    players[uid].missed = acted ? 0 : (players[uid].missed ?? 0) + 1;
+    players[uid].score = goals[uid];
+    players[uid].correct = goals[uid];
+    update[`players.${uid}`] = players[uid];
+  }
+  // Three kicks in a row without doing anything means they left: the other player wins.
+  const forfeit = room.memberIds.find((uid) => players[uid].missed >= 3);
+  if (winner || forfeit) {
+    Object.assign(update, { status: "done", finishedAt: Date.now(), forfeit: forfeit ?? null, winner: forfeit ? room.memberIds.find((u) => u !== forfeit) : winner, idx: k + 1 });
+  } else {
+    Object.assign(update, { idx: k + 1, qStartedAt: Date.now() + SHOOTOUT.revealMs });
+  }
+  if (!(await store.cas(`rooms/${id}`, { idx: k, status: "playing" }, update))) return store.get(`rooms/${id}`);
+  const next = await store.get(`rooms/${id}`);
+  if (next.status === "done") await settle(next);
+  return next;
+}
+
 async function settle(room) {
   const store = await getStore();
   const [a, b] = room.memberIds;
@@ -266,7 +345,8 @@ export async function rematch(identity, code) {
   memberOnly(room, identity.uid);
   if (room.status !== "done") throw new GameError("Finish the battle first.");
   if (room.rematch) return { code: room.rematch };
-  const next = await createRoom(identity, { difficulty: room.difficulty, kind: room.kind });
+  const squad = room.players[identity.uid]?.squad;
+  const next = await createRoom(identity, { difficulty: room.difficulty, kind: room.kind, squad: squad ? { shooter: squad.shooter.id, keeper: squad.keeper.id } : null });
   await store.update(`rooms/${id}`, { rematch: next.code });
   return { code: next.code };
 }

@@ -12,7 +12,8 @@ import { behindPlayers } from "./_lib/games/cg/behind.js";
 import { deleteCreation, getCreation, listCreations, saveCreation } from "./_lib/games/creations.js";
 import { addFeatured, listFeatured, removeFeatured } from "./_lib/games/featured.js";
 import { finishKeepy, startKeepy } from "./_lib/games/keepy.js";
-import { answerRoom, cancelRoom, createRoom, friendsRanking, getRoom, joinRoom, quickMatch, rematch, tickRoom } from "./_lib/games/battle.js";
+import { playSolo, shootoutPlayers, startSolo } from "./_lib/games/shootout.js";
+import { answerRoom, cancelRoom, createRoom, friendsRanking, getRoom, joinRoom, kickRoom, quickMatch, rematch, tickRoom } from "./_lib/games/battle.js";
 import { COMPETITIONS, createLeague, fixtures, joinLeague, leaveLeague, myLeagues, myPredictions, place, settle } from "./_lib/games/predictor.js";
 import { decideQuestion, pendingQuestions, reportQuestion, submitQuestion } from "./_lib/games/questions.js";
 import { getStore, usesFirestore } from "./_lib/games/store.js";
@@ -27,7 +28,7 @@ import { GameError, msToWeekEnd, rateLimit } from "./_lib/games/util.js";
  */
 
 // Calls that don't count as "playing today" for the admin numbers.
-const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending", "career.names", "footle.players", "grid.get", "chat.sync", "chat.search", "chat.open", "cg.get", "live.featured", "create.list", "create.get", "behind.players"]);
+const NOT_ACTIVITY = new Set(["me", "admin.stats", "home.summary", "lb.get", "q.pending", "career.names", "footle.players", "grid.get", "chat.sync", "chat.search", "chat.open", "cg.get", "live.featured", "create.list", "create.get", "behind.players", "so.players"]);
 
 const ACTIONS = {
   /* who am I (no database access: used by the sidebar to show the Admin link) */
@@ -115,6 +116,11 @@ const ACTIONS = {
   "create.save": (who, b) => saveCreation(who, b),
   "create.delete": (who, b) => deleteCreation(who, b.id),
 
+  /* mind games: shootout (against the computer; the chat and live versions are under cg.* and battle.*) */
+  "so.players": async () => shootoutPlayers(),
+  "so.start": (who, b) => startSolo(who, { squad: b.squad }),
+  "so.play": (who, b) => playSolo(who, String(b.session ?? ""), b),
+
   /* keepie-uppie */
   "keepy.start": (who) => startKeepy(who),
   "keepy.finish": (who, b) => finishKeepy(who, String(b.session ?? ""), b.score),
@@ -135,12 +141,13 @@ const ACTIONS = {
   "pred.leaveLeague": (who, b) => leaveLeague(who, b.code),
 
   /* head-to-head battles */
-  "battle.create": (who, b) => createRoom(who, { difficulty: b.difficulty, kind: b.kind }),
-  "battle.join": (who, b) => joinRoom(who, b.code),
-  "battle.quick": (who, b) => quickMatch(who, { difficulty: b.difficulty, kind: b.kind }),
+  "battle.create": (who, b) => createRoom(who, { difficulty: b.difficulty, kind: b.kind, squad: b.squad }),
+  "battle.join": (who, b) => joinRoom(who, b.code, b.squad),
+  "battle.quick": (who, b) => quickMatch(who, { difficulty: b.difficulty, kind: b.kind, squad: b.squad }),
   "battle.cancel": (who, b) => cancelRoom(who, b.code),
   "battle.room": async (who, b) => ({ room: await getRoom(who, b.code), now: Date.now() }),
   "battle.answer": async (who, b) => ({ room: await answerRoom(who, b.code, { index: b.index, choice: b.choice }), now: Date.now() }),
+  "battle.kick": async (who, b) => ({ room: await kickRoom(who, b.code, b), now: Date.now() }),
   "battle.tick": async (who, b) => ({ room: await tickRoom(who, b.code), now: Date.now() }),
   "battle.rematch": (who, b) => rematch(who, b.code),
   "battle.friends": async (who) => ({ friends: await friendsRanking(who) }),
