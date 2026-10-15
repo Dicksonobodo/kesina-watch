@@ -70,7 +70,10 @@ export function AuthProvider({ children }) {
       async signUpWithEmail(name, email, password) {
         const a = requireAuth();
         const { user: created } = await createUserWithEmailAndPassword(a, email, password);
-        if (name) await updateProfile(created, { displayName: name });
+        if (name) {
+          await updateProfile(created, { displayName: name });
+          await created.getIdToken(true); // the next requests carry the name, so it becomes the username (not the email)
+        }
         await ensureUserProfile({ ...created, displayName: name || created.displayName });
       },
 

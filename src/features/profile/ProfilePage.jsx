@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Bookmark, Check, Crown, LogOut, Send, ShieldCheck, Smartphone, Zap } from "lucide-react";
+import { AtSign, Bookmark, Check, Crown, LogOut, Mail, Pencil, Send, ShieldCheck, Smartphone, UserRound, Zap } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useShield } from "@/features/shield/ShieldProvider";
 import { useAccount } from "@/features/account/AccountProvider";
 import { api } from "@/lib/api";
 import { Avatar } from "@/components/ui/Avatar";
+import { saveUsername, useGameIdentity } from "@/lib/gameIdentity";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -18,6 +19,7 @@ export function ProfilePage() {
   const account = useAccount();
   const navigate = useNavigate();
   const [leaving, setLeaving] = useState(false);
+  const game = useGameIdentity(Boolean(user));
 
   const provider = user?.providerData?.[0]?.providerId === "google.com" ? "Google" : isPreview ? "Preview" : "Email";
 
@@ -34,11 +36,25 @@ export function ProfilePage() {
       <section className="glass relative mt-8 overflow-hidden rounded-[28px] p-6 sm:p-8">
         <div className="absolute -top-20 -right-10 size-60 rounded-full bg-signal/10 blur-3xl" />
         <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
-          <Avatar user={user} className="size-20 text-xl" />
+          <div className="relative w-fit">
+            {game?.avatar ? (
+              <span className="grid size-20 place-items-center rounded-3xl bg-white/[.07] text-4xl ring-1 ring-white/10">{game.avatar}</span>
+            ) : (
+              <Avatar user={user} className="size-20 text-xl" />
+            )}
+            {user?.photoURL && game?.avatar && <img src={user.photoURL} alt="" referrerPolicy="no-referrer" className="absolute -right-2 -bottom-2 size-8 rounded-full object-cover ring-2 ring-ink-900" />}
+            <Link to="/games/profile" className="absolute -top-2 -right-2 grid size-7 place-items-center rounded-full bg-signal text-ink-950 shadow-lg" aria-label="Change avatar" title="Change avatar">
+              <Pencil className="size-3.5" />
+            </Link>
+          </div>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-display text-2xl font-bold tracking-tight">{user?.displayName || "Dixon Watch user"}</h2>
-            <p className="truncate text-mist-500">{user?.email}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <h2 className="truncate font-display text-2xl font-bold tracking-tight">{user?.displayName || game?.name || "Dixon Watch user"}</h2>
+            <dl className="mt-3 space-y-2 text-sm">
+              <Detail icon={UserRound} label="Name" value={user?.displayName || "Not set"} />
+              <UsernameRow game={game} />
+              <Detail icon={Mail} label="Email" value={user?.email || "Not set"} />
+            </dl>
+            <div className="mt-4 flex flex-wrap gap-2">
               <Badge>Signed in with {provider}</Badge>
               {account.premium ? (
                 <Badge tone="signal">
@@ -217,6 +233,69 @@ function Pref({ icon: Icon, title, value }) {
       <Icon className="size-[18px] text-mist-500" />
       <span className="flex-1 text-[15px]">{title}</span>
       <span className="text-sm text-mist-500">{value}</span>
+    </div>
+  );
+}
+
+/* ---------- name, username, email ---------- */
+
+function Detail({ icon: Icon, label, value, children }) {
+  return (
+    <div className="flex items-center gap-3">
+      <Icon className="size-4 shrink-0 text-mist-500" />
+      <dt className="w-20 shrink-0 text-mist-500">{label}</dt>
+      <dd className="min-w-0 flex-1 truncate text-mist-100">{children ?? value}</dd>
+    </div>
+  );
+}
+
+/** The username other players see (games, chat, leaderboards). Editable here. */
+function UsernameRow({ game }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await saveUsername(value.trim());
+      setEditing(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <Detail icon={AtSign} label="Username">
+        {editing ? (
+          <form onSubmit={save} className="flex items-center gap-2">
+            <input value={value} onChange={(e) => setValue(e.target.value)} maxLength={20} autoFocus aria-label="New username" className="h-9 min-w-0 flex-1 rounded-xl bg-white/[.06] px-3 text-sm ring-1 ring-white/10 outline-none focus:ring-signal/60" />
+            <Button size="sm" type="submit" loading={busy} disabled={value.trim().length < 2}>
+              Save
+            </Button>
+            <button type="button" onClick={() => setEditing(false)} className="text-xs text-mist-500">
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <span className="flex items-center gap-2">
+            <span className="truncate font-semibold">{game?.name ? `@${game.name}` : "…"}</span>
+            {game?.name && (
+              <button onClick={() => (setValue(game.name), setEditing(true))} className="inline-flex items-center gap-1 rounded-full bg-white/[.06] px-2.5 py-0.5 text-[11px] font-semibold text-signal ring-1 ring-white/10">
+                <Pencil className="size-3" /> Change
+              </button>
+            )}
+          </span>
+        )}
+      </Detail>
+      <p className="mt-1 pl-[7.75rem] text-[11px] text-mist-500">What other players see in games, chat and leaderboards.</p>
+      {error && <p className="mt-1 pl-[7.75rem] text-xs text-live">{error}</p>}
     </div>
   );
 }

@@ -220,12 +220,14 @@ export function GameProfile() {
         <div className="flex flex-wrap items-center gap-4">
           <span className="grid size-20 place-items-center rounded-3xl bg-white/[.07] text-4xl ring-1 ring-white/10">{profile.avatar}</span>
           <div className="min-w-0 flex-1">
+            <label className="mb-1 block font-mono text-[10px] tracking-[.18em] text-mist-500 uppercase">Username</label>
             <div className="flex items-center gap-2">
-              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} aria-label="Display name" className="h-10 min-w-0 flex-1 rounded-xl bg-white/[.06] px-3 font-display text-lg font-bold ring-1 ring-white/10 outline-none focus:ring-signal/60" />
+              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} aria-label="Username" className="h-10 min-w-0 flex-1 rounded-xl bg-white/[.06] px-3 font-display text-lg font-bold ring-1 ring-white/10 outline-none focus:ring-signal/60" />
               <Button size="sm" variant="ghost" onClick={() => run("name", "profile.setName", { name })} loading={busy === "name"} disabled={name.trim() === profile.name || name.trim().length < 2}>
                 Save
               </Button>
             </div>
+            <p className="mt-1 text-[11px] text-mist-500">What other players see in games, chat and leaderboards. They can find you by it.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <StatChip icon={Flame} value={profile.streak} label="Day streak" />
               <StatChip icon={Coins} value={profile.coins} label="Coins" />

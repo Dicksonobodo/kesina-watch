@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
 
-export function Avatar({ user, className }) {
+export function Avatar({ user, emoji, className }) {
   const initials = (user?.displayName || user?.email || "?")
     .split(/[\s@.]+/)
     .filter(Boolean)
@@ -16,6 +16,13 @@ export function Avatar({ user, className }) {
         referrerPolicy="no-referrer"
         className={cn("size-9 rounded-full object-cover ring-1 ring-white/15", className)}
       />
+    );
+  }
+  if (emoji) {
+    return (
+      <span className={cn("grid size-9 shrink-0 place-items-center rounded-full bg-white/[.08] text-lg ring-1 ring-white/15", className)} aria-hidden>
+        {emoji}
+      </span>
     );
   }
   return (

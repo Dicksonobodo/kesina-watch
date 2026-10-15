@@ -4,6 +4,7 @@ import { Coins, Flame, Sparkles, Trophy } from "lucide-react";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { gamesApi, THEME_COLORS } from "@/lib/games";
+import { publishGameProfile } from "@/lib/gameIdentity";
 import { ChatProvider } from "./chat/ChatProvider";
 import { ChatLauncher, ChatPanel } from "./chat/ChatPanel";
 import { GameHost } from "./chat/GameHost";
@@ -25,6 +26,7 @@ export function GamesLayout() {
     try {
       const data = await gamesApi("profile.get");
       setState({ loading: false, error: "", profile: data.profile, daily: data.daily, store: data.store, kinds: data.kinds, weekEndsInMs: data.weekEndsInMs });
+      publishGameProfile(data.profile);
       return data;
     } catch (err) {
       setState((s) => ({ ...s, loading: false, error: err.message }));
@@ -54,7 +56,7 @@ export function GamesLayout() {
     [toast, refresh],
   );
 
-  const value = useMemo(() => ({ ...state, refresh, rewarded, toast, setProfile: (profile) => setState((s) => ({ ...s, profile })) }), [state, refresh, rewarded, toast]);
+  const value = useMemo(() => ({ ...state, refresh, rewarded, toast, setProfile: (profile) => (publishGameProfile(profile), setState((s) => ({ ...s, profile }))) }), [state, refresh, rewarded, toast]);
   const accent = THEME_COLORS[state.profile?.theme] ?? THEME_COLORS.lime;
 
   return (

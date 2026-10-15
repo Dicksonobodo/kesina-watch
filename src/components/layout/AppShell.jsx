@@ -9,6 +9,7 @@ import { PresenceReporter } from "@/features/account/PresenceReporter";
 import { useAccount } from "@/features/account/AccountProvider";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
+import { useGameIdentity } from "@/lib/gameIdentity";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { cn } from "@/lib/cn";
 import { onSyncProblem } from "@/lib/userData";
@@ -31,6 +32,7 @@ export function AppShell() {
   useEffect(() => onSyncProblem(setSyncProblem), []);
   const online = useOnline();
   const { admin } = useAccount();
+  const game = useGameIdentity(Boolean(user));
 
   return (
     <div className="relative min-h-dvh lg:pl-72">
@@ -56,9 +58,9 @@ export function AppShell() {
               cn("flex items-center gap-3 rounded-2xl p-2.5 transition hover:bg-white/[.05]", isActive && "bg-white/[.06]")
             }
           >
-            <Avatar user={user} />
+            <Avatar user={user} emoji={game?.avatar} />
             <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold">{user?.displayName || "Your account"}</span>
+              <span className="block truncate text-sm font-semibold">{game?.name ? `@${game.name}` : user?.displayName || "Your account"}</span>
               <span className="block truncate text-xs text-mist-500">{user?.email}</span>
             </span>
           </NavLink>
@@ -71,7 +73,7 @@ export function AppShell() {
           <Logo />
         </NavLink>
         <NavLink to="/profile" aria-label="Profile">
-          <Avatar user={user} className="size-8" />
+          <Avatar user={user} emoji={game?.avatar} className="size-8" />
         </NavLink>
       </header>
 
