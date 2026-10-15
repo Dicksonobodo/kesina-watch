@@ -57,10 +57,10 @@ export function groupOptions(teamCount) {
 
 /**
  * Builds a new tournament.
- * opts: { name, format, teams: [names], legs (league 1|2), groups (count), cupLegs (1|2), shuffle: bool }
+ * opts: { name, format, teams: [name or { name, badge }], legs (league 1|2), groups (count), cupLegs (1|2), shuffle: bool }
  */
 export function createTournament({ name, format, teams, legs = 1, groups = 2, cupLegs = 1, draw = true }) {
-  const list = teams.map((n) => ({ id: uid(), name: n.trim() })).filter((t) => t.name);
+  const list = teams.map((n) => (typeof n === "string" ? { name: n } : n)).map((x) => ({ id: uid(), name: String(x.name ?? "").trim(), ...(x.badge ? { badge: x.badge } : {}) })).filter((t) => t.name);
   const ids = (draw ? shuffle(list) : list).map((t) => t.id);
   const t = { v: 1, name: name.trim(), format, teams: list, legs, scores: {}, fixtures: [], groups: null, ko: null, createdAt: Date.now() };
 
@@ -137,7 +137,7 @@ export const played = (s) => s && Number.isFinite(s.h) && Number.isFinite(s.a);
 
 /** A league table for some teams over some fixtures. */
 export function table(t, teamIds, fixtures) {
-  const rows = new Map(teamIds.map((id) => [id, { id, name: teamName(t, id), p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0, form: [] }]));
+  const rows = new Map(teamIds.map((id) => [id, { id, name: teamName(t, id), badge: teamBadge(t, id), p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0, form: [] }]));
   for (const f of fixtures) {
     const s = t.scores[f.id];
     if (!played(s)) continue;
@@ -176,6 +176,8 @@ export function table(t, teamIds, fixtures) {
 }
 
 export const teamName = (t, id) => t.teams.find((x) => x.id === id)?.name ?? "?";
+/** The real club badge a team picked (a picture link), if any. */
+export const teamBadge = (t, id) => t.teams.find((x) => x.id === id)?.badge ?? null;
 export const groupFixtures = (t, gi) => t.fixtures.filter((f) => f.stage === "group" && f.group === gi);
 export const groupTable = (t, gi) => table(t, t.groups[gi], groupFixtures(t, gi));
 export const groupsDone = (t) => t.fixtures.filter((f) => f.stage === "group").every((f) => played(t.scores[f.id]));

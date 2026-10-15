@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, Check, ChevronDown, Copy, Crown, Info, ListOrdered, PencilLine, Plus, RefreshCw, Shuffle, Trash2, Trophy, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, Crown, Info, ListOrdered, PencilLine, Plus, RefreshCw, Shield, Shuffle, Trash2, Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { Card, ErrorNote, Eyebrow } from "@/features/games/ui";
 import { GameArt } from "@/features/games/art";
 import * as T from "./tourney";
+import { ClubPicker, TeamBadge, TeamLabel } from "./ClubBadge";
 
 /*
  * Tournament creator: make a league, a Champions League style or World Cup style tournament, or
@@ -82,8 +83,9 @@ function NewTournament({ onCancel }) {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [format, setFormat] = useState("league");
-  const [teams, setTeams] = useState([]);
+  const [teams, setTeams] = useState([]); // [{ name, badge }]
   const [entry, setEntry] = useState("");
+  const [badgeFor, setBadgeFor] = useState(null); // index of the team getting a badge, or "new" to add a real club
   const [paste, setPaste] = useState(false);
   const [legs, setLegs] = useState(1);
   const [cupLegs, setCupLegs] = useState(1);
@@ -100,7 +102,7 @@ function NewTournament({ onCancel }) {
     const names = raw.split(/\n|,/).map((s) => s.trim().slice(0, 40)).filter(Boolean);
     setTeams((list) => {
       const out = [...list];
-      for (const n of names) if (!out.some((x) => x.toLowerCase() === n.toLowerCase()) && out.length < 64) out.push(n);
+      for (const n of names) if (!out.some((x) => x.name.toLowerCase() === n.toLowerCase()) && out.length < 64) out.push({ name: n, badge: null });
       return out;
     });
     setEntry("");
@@ -200,21 +202,41 @@ function NewTournament({ onCancel }) {
             </Button>
           </form>
         )}
+        <button type="button" onClick={() => setBadgeFor("new")} className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/[.05] px-3 py-1.5 text-xs font-semibold text-signal ring-1 ring-white/10 transition hover:bg-white/[.09]">
+          <Shield className="size-3.5" /> Add a real club, with its badge
+        </button>
         {teams.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
-            {teams.map((tname, i) => (
-              <span key={tname} className="inline-flex items-center gap-1.5 rounded-full bg-white/[.06] py-1 pr-1.5 pl-3 text-sm ring-1 ring-white/10">
-                <span className="font-mono text-[10px] text-mist-500">{i + 1}</span> {tname}
-                <button onClick={() => setTeams((l) => l.filter((x) => x !== tname))} aria-label={`Remove ${tname}`} className="grid size-5 place-items-center rounded-full text-mist-500 hover:bg-white/10 hover:text-white">
+            {teams.map((team, i) => (
+              <span key={team.name} className="inline-flex items-center gap-1.5 rounded-full bg-white/[.06] py-1 pr-1.5 pl-1 text-sm ring-1 ring-white/10">
+                <button type="button" onClick={() => setBadgeFor(i)} aria-label={`Badge for ${team.name}`} title="Pick a badge" className="relative grid size-7 place-items-center rounded-full bg-white/[.06] transition hover:bg-white/15">
+                  <TeamBadge src={team.badge} name={team.name} className="size-5" />
+                  {!team.badge && <span className="absolute -right-0.5 -bottom-0.5 grid size-3 place-items-center rounded-full bg-signal text-[9px] leading-none font-black text-ink-950">+</span>}
+                </button>
+                {team.name}
+                <button onClick={() => setTeams((l) => l.filter((x) => x.name !== team.name))} aria-label={`Remove ${team.name}`} className="grid size-5 place-items-center rounded-full text-mist-500 hover:bg-white/10 hover:text-white">
                   <X className="size-3" />
                 </button>
               </span>
             ))}
           </div>
         )}
+        {teams.length > 0 && <p className="mt-2 text-xs text-mist-500">Tap a team's shield to give it a real club's badge.</p>}
         <p className="mt-3 flex items-center gap-1.5 text-xs text-mist-500">
           <Shuffle className="size-3.5" /> The fixtures (and groups) are drawn at random when you create it.
         </p>
+        <ClubPicker
+          open={badgeFor !== null}
+          forTeam={badgeFor === "new" || badgeFor === null ? null : teams[badgeFor]?.name}
+          current={typeof badgeFor === "number" ? teams[badgeFor]?.badge : null}
+          onClose={() => setBadgeFor(null)}
+          onPick={(club) => {
+            if (badgeFor === "new") {
+              if (club) setTeams((l) => (l.some((x) => x.name.toLowerCase() === club.name.toLowerCase()) || l.length >= 64 ? l : [...l, { name: club.name, badge: club.badge }]));
+            } else setTeams((l) => l.map((x, i) => (i === badgeFor ? { ...x, badge: club?.badge ?? null } : x)));
+            setBadgeFor(null);
+          }}
+        />
       </Card>
 
       <div className="mt-4">
@@ -260,6 +282,7 @@ export function TournamentView() {
   const [editing, setEditing] = useState(null); // { id, home, away, tie? } match whose result is being entered
   const [picking, setPicking] = useState(null); // group index whose qualifiers are being chosen
   const [help, setHelp] = useState(false);
+  const [badges, setBadges] = useState(false); // the organiser's "team badges" sheet
   const timer = useRef(0);
 
   const load = useCallback(() => {
@@ -393,8 +416,9 @@ export function TournamentView() {
 
       {ch.final && (
         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mt-4 flex items-center gap-4 rounded-3xl bg-gradient-to-r from-amber-400/20 via-amber-300/10 to-transparent p-5 ring-1 ring-amber-300/40">
-          <span className="grid size-14 place-items-center rounded-2xl bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-lg">
-            <Crown className="size-7" fill="currentColor" />
+          <span className="relative grid size-14 place-items-center rounded-2xl bg-gradient-to-b from-amber-300 to-amber-500 text-amber-950 shadow-lg">
+            {T.teamBadge(t, ch.id) ? <TeamBadge src={T.teamBadge(t, ch.id)} name={ch.name} className="size-10" /> : <Crown className="size-7" fill="currentColor" />}
+            {T.teamBadge(t, ch.id) && <Crown className="absolute -top-2.5 -right-2.5 size-5 rotate-12 text-amber-300 drop-shadow" fill="currentColor" />}
           </span>
           <span>
             <span className="block font-mono text-[11px] tracking-[.2em] text-amber-200 uppercase">Champions</span>
@@ -413,9 +437,14 @@ export function TournamentView() {
       </div>
 
       {editable ? (
-        <p className="mt-3 flex items-center gap-2 text-xs text-mist-500">
-          <PencilLine className="size-3.5 text-signal" /> Tap any match to add or change its result. Tables and the bracket update by themselves.
-        </p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-2 text-xs text-mist-500">
+            <PencilLine className="size-3.5 text-signal" /> Tap any match to add or change its result. Tables and the bracket update by themselves.
+          </p>
+          <button onClick={() => setBadges(true)} className="inline-flex items-center gap-1.5 rounded-full bg-white/[.05] px-3 py-1.5 text-xs font-semibold text-signal ring-1 ring-white/10 transition hover:bg-white/[.09]">
+            <Shield className="size-3.5" /> Team badges
+          </button>
+        </div>
       ) : (
         <p className="mt-3 rounded-2xl bg-white/[.04] px-4 py-2.5 text-xs text-mist-500">You're following this tournament. Only the organiser can add results.</p>
       )}
@@ -455,6 +484,7 @@ export function TournamentView() {
         {tab === "bracket" && <Bracket t={t} editable={editable} onOpen={open} />}
       </div>
 
+      <BadgesSheet open={badges} t={t} onClose={() => setBadges(false)} onSet={(teamId, badge) => update((n) => ((n.teams.find((x) => x.id === teamId).badge = badge ?? undefined), n))} />
       <AnimatePresence>
         {editing && <ResultSheet t={t} match={editing} onClose={() => setEditing(null)} onSave={(r) => (saveResult(editing.id, r), setEditing(null))} />}
         {picking !== null && (
@@ -533,8 +563,8 @@ function TableCard({ t, rows, title, highlight = 0, qualified = null, leader = f
             <tr className="text-[11px] text-mist-500">
               <th className="py-2 pl-4 text-left font-medium">#</th>
               <th className="py-2 text-left font-medium">Team</th>
-              {["P", "W", "D", "L", "GD", "Pts"].map((h) => (
-                <th key={h} className={cn("px-1.5 py-2 text-center font-medium", h === "Pts" && "pr-4")}>
+              {[["P", "Played"], ["W", "Won"], ["D", "Drawn"], ["L", "Lost"], ["GF", "Goals for (scored)"], ["GA", "Goals against (conceded)"], ["GD", "Goal difference"], ["Pts", "Points"]].map(([h, title]) => (
+                <th key={h} title={title} className={cn("px-1 py-2 text-center font-medium sm:px-1.5", h === "Pts" && "pr-3 sm:pr-4")}>
                   {h}
                 </th>
               ))}
@@ -548,17 +578,21 @@ function TableCard({ t, rows, title, highlight = 0, qualified = null, leader = f
                   <td className="py-2 pl-4">
                     <span className={cn("grid size-6 place-items-center rounded-md font-mono text-[11px]", q || (!qualified && i < highlight) ? "bg-signal/15 text-signal" : "text-mist-500")}>{i + 1}</span>
                   </td>
-                  <td className="max-w-40 truncate py-2 font-medium">
-                    {r.name}
-                    {q && <span className="ml-1.5 rounded bg-signal px-1 font-mono text-[9px] font-bold text-ink-950">Q</span>}
-                    {leader && i === 0 && r.p > 0 && <Crown className="ml-1.5 inline size-3.5 text-amber-300" />}
+                  <td className="py-2 font-medium">
+                    <span className="flex max-w-[9.5rem] items-center gap-1.5 sm:max-w-56">
+                      <TeamLabel name={r.name} badge={r.badge} />
+                      {q && <span className="shrink-0 rounded bg-signal px-1 font-mono text-[9px] font-bold text-ink-950">Q</span>}
+                      {leader && i === 0 && r.p > 0 && <Crown className="size-3.5 shrink-0 text-amber-300" />}
+                    </span>
                   </td>
-                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.p}</td>
-                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.w}</td>
-                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.d}</td>
-                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.l}</td>
-                  <td className="px-1.5 text-center tabular-nums text-mist-300">{r.gd > 0 ? `+${r.gd}` : r.gd}</td>
-                  <td className="px-1.5 pr-4 text-center font-bold tabular-nums">{r.pts}</td>
+                  <td className="px-1 text-center tabular-nums text-mist-300 sm:px-1.5">{r.p}</td>
+                  <td className="px-1 text-center tabular-nums text-mist-300 sm:px-1.5">{r.w}</td>
+                  <td className="px-1 text-center tabular-nums text-mist-300 sm:px-1.5">{r.d}</td>
+                  <td className="px-1 text-center tabular-nums text-mist-300 sm:px-1.5">{r.l}</td>
+                  <td className="px-1 text-center tabular-nums text-mist-300 sm:px-1.5">{r.gf}</td>
+                  <td className="px-1 text-center tabular-nums text-mist-300 sm:px-1.5">{r.ga}</td>
+                  <td className="px-1 text-center tabular-nums text-mist-300 sm:px-1.5">{r.gd > 0 ? `+${r.gd}` : r.gd}</td>
+                  <td className="px-1 pr-3 text-center font-bold tabular-nums sm:px-1.5 sm:pr-4">{r.pts}</td>
                 </tr>
               );
             })}
@@ -604,7 +638,7 @@ function MatchButton({ t, id, home, away, homeLabel, awayLabel, editable, onOpen
       onClick={() => onOpen({ id, home, away, note })}
       className={cn("flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-left transition", canEdit && "hover:bg-white/[.05] active:scale-[.99]")}
     >
-      <span className={cn("min-w-0 flex-1 truncate text-right text-sm", result === "h" && "font-bold", !home && "text-mist-500 italic")}>{home ? T.teamName(t, home) : homeLabel}</span>
+      <span className={cn("flex min-w-0 flex-1 justify-end text-right text-sm", result === "h" && "font-bold", !home && "text-mist-500 italic")}>{home ? <TeamLabel name={T.teamName(t, home)} badge={T.teamBadge(t, home)} reverse /> : <span className="truncate">{homeLabel}</span>}</span>
       {done ? (
         <span className="flex shrink-0 flex-col items-center">
           <span className="rounded-lg bg-white/[.08] px-2.5 py-1 font-display text-[15px] font-bold tabular-nums">
@@ -617,7 +651,7 @@ function MatchButton({ t, id, home, away, homeLabel, awayLabel, editable, onOpen
       ) : (
         <span className="shrink-0 px-2 text-xs text-mist-700">vs</span>
       )}
-      <span className={cn("min-w-0 flex-1 truncate text-sm", result === "a" && "font-bold", !away && "text-mist-500 italic")}>{away ? T.teamName(t, away) : awayLabel}</span>
+      <span className={cn("flex min-w-0 flex-1 text-sm", result === "a" && "font-bold", !away && "text-mist-500 italic")}>{away ? <TeamLabel name={T.teamName(t, away)} badge={T.teamBadge(t, away)} /> : <span className="truncate">{awayLabel}</span>}</span>
     </button>
   );
 }
@@ -658,7 +692,7 @@ function TieCard({ t, tie, memo, editable, onOpen, title }) {
     <div className="w-72 shrink-0 rounded-3xl bg-white/[.03] p-2 ring-1 ring-white/[.07]">
       <div className="flex items-center justify-between px-2 pt-1">
         <p className="font-mono text-[10px] tracking-[.18em] text-mist-500 uppercase">{title}</p>
-        {r.winner && !r.bye && <span className="text-[11px] font-semibold text-signal">✓ {T.teamName(t, r.winner)}</span>}
+        {r.winner && !r.bye && <span className="flex min-w-0 items-center gap-1 text-[11px] font-semibold text-signal">✓ <TeamLabel name={T.teamName(t, r.winner)} badge={T.teamBadge(t, r.winner)} badgeClass="size-4" /></span>}
       </div>
       {r.bye ? (
         <p className="px-2 py-3 text-sm">
@@ -778,11 +812,13 @@ function ResultSheet({ t, match, onClose, onSave }) {
 
         <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           <div className="flex flex-col items-center gap-2 text-center">
+            <TeamBadge src={T.teamBadge(t, match.home)} name={homeName} className="size-9" />
             <p className="line-clamp-2 min-h-10 text-sm font-semibold">{homeName}</p>
             <Stepper value={h} onChange={setH} label={`${homeName} goals`} />
           </div>
           <span className="pt-10 font-display text-2xl text-mist-500">:</span>
           <div className="flex flex-col items-center gap-2 text-center">
+            <TeamBadge src={T.teamBadge(t, match.away)} name={awayName} className="size-9" />
             <p className="line-clamp-2 min-h-10 text-sm font-semibold">{awayName}</p>
             <Stepper value={a} onChange={setA} label={`${awayName} goals`} />
           </div>
@@ -839,8 +875,8 @@ function QualifierSheet({ t, gi, onClose, onSave }) {
             <p className="text-xs font-semibold text-mist-300">{label}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {rows.map((r) => (
-                <button key={r.id} disabled={r.id === other} onClick={() => set(r.id)} className={cn("rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition disabled:opacity-30", value === r.id ? "bg-signal text-ink-950 ring-signal" : "bg-white/[.04] text-mist-300 ring-white/10")}>
-                  {r.name} <span className="font-mono text-[10px] opacity-70">{r.pts}pts</span>
+                <button key={r.id} disabled={r.id === other} onClick={() => set(r.id)} className={cn("inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold ring-1 transition disabled:opacity-30", value === r.id ? "bg-signal text-ink-950 ring-signal" : "bg-white/[.04] text-mist-300 ring-white/10")}>
+                  <TeamBadge src={r.badge} name={r.name} className="size-4" /> {r.name} <span className="font-mono text-[10px] opacity-70">{r.pts}pts</span>
                 </button>
               ))}
             </div>
@@ -858,5 +894,53 @@ function QualifierSheet({ t, gi, onClose, onSave }) {
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+/* ---------- team badges (organiser) ---------- */
+
+function BadgesSheet({ open, t, onClose, onSet }) {
+  const [team, setTeam] = useState(null); // the team getting a badge
+  const openedAt = useRef(0);
+  useEffect(() => {
+    if (open) openedAt.current = Date.now();
+  }, [open]);
+  return (
+    <>
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] grid place-items-end bg-black/60 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:place-items-center" onClick={() => Date.now() - openedAt.current > 400 && onClose()}>
+            <motion.div initial={{ y: 30 }} animate={{ y: 0 }} onClick={(e) => e.stopPropagation()} className="flex max-h-[80dvh] w-full max-w-md flex-col rounded-[28px] bg-ink-900 p-5 ring-1 ring-white/10">
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-lg font-bold">Team badges</h3>
+                <button onClick={onClose} aria-label="Close" className="grid size-8 place-items-center rounded-full bg-white/[.06]">
+                  <X className="size-4" />
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-mist-500">Give any team a real club's badge. It shows in the tables, the matches and the bracket.</p>
+              <div className="mt-3 min-h-0 flex-1 divide-y divide-white/[.05] overflow-y-auto overscroll-contain rounded-2xl bg-white/[.03] ring-1 ring-white/[.06]">
+                {t.teams.map((x) => (
+                  <button key={x.id} onClick={() => setTeam(x)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-white/[.05]">
+                    <TeamBadge src={x.badge} name={x.name} className="size-8" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{x.name}</span>
+                    <span className="text-xs font-semibold text-signal">{x.badge ? "Change" : "Add badge"}</span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <ClubPicker
+        open={Boolean(team)}
+        forTeam={team?.name}
+        current={team?.badge ?? null}
+        onClose={() => setTeam(null)}
+        onPick={(club) => {
+          onSet(team.id, club?.badge ?? null);
+          setTeam(null);
+        }}
+      />
+    </>
   );
 }
