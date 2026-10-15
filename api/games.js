@@ -196,7 +196,27 @@ async function databaseSpeed(projectId) {
   }
 }
 
-export async function GET() {
+/**
+ * Where the Live (detection) server is right now. It runs on a laptop behind a tunnel whose address
+ * changes; the laptop saves it in config/server and refreshes it every minute (server/scripts/go-live.mjs).
+ * An address not refreshed for a while means the laptop is off, so it counts as offline.
+ */
+async function liveServer() {
+  let url = null;
+  let at = 0;
+  try {
+    const doc = await (await getStore()).get("config/server");
+    url = doc?.url ?? null;
+    at = doc?.at ?? 0;
+  } catch {
+    /* no database: no address */
+  }
+  const online = Boolean(url) && Date.now() - at < 150_000;
+  return Response.json({ url: online ? url : null, online, checkedAt: Date.now() }, { headers: { "Cache-Control": "public, max-age=5, s-maxage=10" } });
+}
+
+export async function GET(request) {
+  if (request && new URL(request.url).searchParams.get("what") === "server") return liveServer();
   const sa = parseServiceAccount();
   const projectId = projectIdFromEnv();
   const checks = {

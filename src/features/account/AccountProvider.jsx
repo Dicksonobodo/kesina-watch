@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { api, isDemoApi } from "@/lib/api";
+import { api } from "@/lib/api";
+import { loadServerUrl } from "@/lib/server";
 import { auth } from "@/lib/firebase";
 import { gamesApi } from "@/lib/games";
 
@@ -28,7 +29,7 @@ export function AccountProvider({ children }) {
       }
       let next = EMPTY;
       // The Live detection server (laptop / VPS), when one is connected.
-      if (!isPreview && !isDemoApi) {
+      if (!isPreview && (await loadServerUrl())) {
         try {
           if (forceToken) await auth?.currentUser?.getIdToken(true); // pick up new Premium claims
           const me = await api("/me");

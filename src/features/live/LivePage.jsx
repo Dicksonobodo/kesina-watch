@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, Megaphone, Music2, Plus, Radio, Trash2, Trophy, X } from "lucide-react";
+import { ArrowRight, CalendarClock, Megaphone, Music2, Play, Plus, Radio, Trash2, Trophy, X } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { useUserCollection } from "@/lib/userData";
-import { isDemoApi } from "@/lib/api";
+import { useServerUrl } from "@/lib/server";
 import { LiveDot } from "@/components/ui/Badge";
 import { LinkBar } from "@/features/home/LinkBar";
 import { useDetector } from "@/features/home/useDetector";
@@ -33,6 +33,7 @@ export function LivePage() {
   const channels = sites.filter((s) => s.kind === "live");
   const [adding, setAdding] = useState(false);
   const compact = status === "detecting" || status === "done";
+  const server = useServerUrl();
 
   // A pinned live: find its stream straight away and bring the player into view.
   const watch = (link) => {
@@ -72,9 +73,10 @@ export function LivePage() {
       </section>
 
       <div className="mt-8">
-        {status === "detecting" && <DetectionProgress url={url} demo={isDemoApi} />}
+        {status === "detecting" && <DetectionProgress url={url} demo={!server} />}
         {status === "done" && result && result.live && <DetectionResult key={result.url} result={result} onReset={reset} autoplay={multiAutoplay(result, autoplay)} liveOnly />}
-        {status === "done" && result && !result.live && (
+        {status === "done" && result && !result.live && result.picks?.length > 0 && <LivePicks result={result} onPick={watch} onReset={reset} />}
+        {status === "done" && result && !result.live && !result.picks?.length && (
           <div className="glass rounded-[28px] p-6 text-center sm:p-8">
             <p className="font-display text-xl font-bold">That isn&apos;t a live stream</p>
             <p className="mt-2 text-sm text-mist-500">Dixon Watch only plays live streams. Paste the page of a live concert, event or channel.</p>
@@ -143,6 +145,42 @@ export function LivePage() {
       )}
 
       <AddSiteDialog open={adding} onClose={() => setAdding(false)} uid={user?.uid} title="Add a live channel" />
+    </div>
+  );
+}
+
+/* ---------- a page that lists several lives: the viewer picks one ---------- */
+
+function LivePicks({ result, onPick, onReset }) {
+  const { picks } = result;
+  return (
+    <div className="glass rounded-[28px] p-5 sm:p-7">
+      <p className="font-mono text-[11px] font-medium tracking-[.18em] text-mist-500 uppercase">{result.site}</p>
+      <h2 className="mt-1.5 font-display text-xl font-bold tracking-tight sm:text-2xl">{picks.length === 1 ? "This page links to a live" : `${picks.length} lives on this page`}</h2>
+      <p className="mt-1 text-sm text-mist-500">Pick one and we&apos;ll find its stream.</p>
+      <ul className="mt-5 grid gap-2.5 sm:grid-cols-2">
+        {picks.map((p) => (
+          <li key={p.url}>
+            <button onClick={() => onPick(p.url)} className="group flex w-full items-center gap-3.5 rounded-2xl bg-white/[.03] p-2.5 text-left ring-1 ring-white/[.08] transition hover:bg-live/[.06] hover:ring-live/40">
+              <span className="relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-rose-600/40 to-ink-950 ring-1 ring-white/10">
+                {p.image ? <img src={p.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 size-full object-cover" onError={(e) => e.currentTarget.remove()} /> : <Radio className="size-5 text-live" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="line-clamp-2 font-semibold leading-snug">{p.title}</span>
+                {p.when && (
+                  <span className="mt-1 flex items-center gap-1 text-xs text-mist-500">
+                    <CalendarClock className="size-3.5 shrink-0" /> <span className="truncate">{p.when}</span>
+                  </span>
+                )}
+              </span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-live/10 text-live ring-1 ring-live/30 transition group-hover:bg-live group-hover:text-white">
+                <Play className="size-4 translate-x-px" />
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button onClick={onReset} className="mt-5 text-sm font-semibold text-signal">Try another link</button>
     </div>
   );
 }

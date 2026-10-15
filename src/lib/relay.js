@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
+import { serverUrl } from "./server";
+
+// The relay lives on the Live server; its address is found when the page loads (lib/server.js).
 
 /**
  * @param dl       file name: the relay asks the browser to save instead of play
@@ -8,10 +10,10 @@ export function relayUrl(source, url, { dl, rewrite } = {}) {
   const params = new URLSearchParams({ t: source.relayToken, url });
   if (dl) params.set("dl", dl);
   if (rewrite) params.set("rw", "1");
-  return `${API_URL}/relay?${params}`;
+  return `${serverUrl()}/relay?${params}`;
 }
 
-export const canRelay = (source) => Boolean(API_URL && source?.relayToken);
+export const canRelay = (source) => Boolean(serverUrl() && source?.relayToken);
 
 /**
  * Relay address that mirrors the real one (/relay/m/<token>/https/host/path?query), so a DASH
@@ -19,7 +21,8 @@ export const canRelay = (source) => Boolean(API_URL && source?.relayToken);
  * through unchanged.
  */
 export function relayMirrorUrl(source, url) {
-  if (url.startsWith(`${API_URL}/relay`)) return url;
+  const base = serverUrl();
+  if (url.startsWith(`${base}/relay`)) return url;
   const u = new URL(url);
-  return `${API_URL}/relay/m/${source.relayToken}/${u.protocol.slice(0, -1)}/${u.host}${u.pathname}${u.search}`;
+  return `${base}/relay/m/${source.relayToken}/${u.protocol.slice(0, -1)}/${u.host}${u.pathname}${u.search}`;
 }

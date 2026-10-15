@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch-path=src --env-file-if-exists=.env src/index.js",
-    "start": "node --env-file-if-exists=.env src/index.js"
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "live": "node scripts/go-live.mjs"
   },
   "dependencies": {
     "@ghostery/adblocker-puppeteer": "^2.20.1",

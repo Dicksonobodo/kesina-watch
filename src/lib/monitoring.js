@@ -7,7 +7,8 @@
  * Reports are de-duplicated and capped per visit so a loop can't flood anything.
  */
 
-const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
+import { serverUrl } from "./server";
+
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
 const RELEASE = import.meta.env.VITE_RELEASE || "dev";
 const MAX_REPORTS = 15;
@@ -70,6 +71,7 @@ export function reportError(error, context = {}) {
 
   sentry?.captureException(err, { tags: { where }, extra });
 
+  const API_URL = serverUrl();
   if (!API_URL) return;
   const body = JSON.stringify({
     message: text,

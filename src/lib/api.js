@@ -1,21 +1,19 @@
 import { auth } from "./firebase";
 import { paletteFor } from "./palette";
 import { reportError } from "./monitoring";
+import { loadServerUrl, refreshServerUrl } from "./server";
 
-const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
 const DETECT_TIMEOUT_MS = 90_000;
-
-// Without VITE_API_URL, results are simulated so the UI can be explored.
-export const isDemoApi = !API_URL;
-export const apiUrl = API_URL;
+const OFFLINE = "Live is offline right now: the stream server isn't running. Try again a bit later.";
 
 /** JSON request to the Dixon server, signed in when a user is. Throws Error(message) on failure. */
 export async function api(path, { method = "GET", body, signal, auth: withAuth = true } = {}) {
-  if (!API_URL) throw new Error("The Dixon Watch server isn't configured.");
+  const base = await loadServerUrl();
+  if (!base) throw new Error(OFFLINE);
   const token = withAuth ? await auth?.currentUser?.getIdToken() : null;
   let res;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetch(`${base}${path}`, {
       method,
       headers: {
         ...(body ? { "Content-Type": "application/json" } : {}),
@@ -35,14 +33,16 @@ export async function api(path, { method = "GET", body, signal, auth: withAuth =
 }
 
 export async function detectMovie(url, { signal } = {}) {
-  if (isDemoApi) return demoDetect();
+  // The server's address can change when the laptop it runs on restarts: if there's none, or the
+  // known one doesn't answer, ask for the latest once before giving up.
+  let base = (await loadServerUrl()) || (await refreshServerUrl());
+  if (!base) throw new Error(OFFLINE);
 
   const token = await auth?.currentUser?.getIdToken();
   // The server gives up at 75s; don't let the browser wait forever if the network stalls.
   const timeout = AbortSignal.timeout(DETECT_TIMEOUT_MS);
-  let res;
-  try {
-    res = await fetch(`${API_URL}/detect`, {
+  const send = (to) =>
+    fetch(`${to}/detect`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -51,10 +51,23 @@ export async function detectMovie(url, { signal } = {}) {
       body: JSON.stringify({ url }),
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
+  let res;
+  try {
+    try {
+      res = await send(base);
+    } catch (err) {
+      if (signal?.aborted || timeout.aborted) throw err;
+      const fresh = await refreshServerUrl();
+      if (!fresh) throw new Error(OFFLINE);
+      if (fresh === base) throw err;
+      base = fresh;
+      res = await send(base);
+    }
   } catch (err) {
     if (signal?.aborted) throw err; // the user started another detection
     if (timeout.aborted) throw new Error("That took too long. The page may be very slow; try again.");
-    throw new Error(navigator.onLine ? "Can't reach Dixon Watch right now. Try again in a moment." : "You're offline. Check your connection.");
+    if (err.message === OFFLINE) throw err;
+    throw new Error(navigator.onLine ? "Can't reach the Live server right now. Try again in a moment." : "You're offline. Check your connection.");
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -68,12 +81,4 @@ export async function detectMovie(url, { signal } = {}) {
   return { ...data, palette: data.palette ?? paletteFor(data.title || url) };
 }
 
-/* ---------- no server configured ---------- */
 
-// Without a detection server nothing can be analyzed. This used to return simulated
-// results with made-up qualities; an honest error is better than fake download buttons.
-function demoDetect() {
-  return Promise.reject(
-    new Error("The video analysis server isn't connected, so links can't be analyzed right now. Set VITE_API_URL to the server's address."),
-  );
-}

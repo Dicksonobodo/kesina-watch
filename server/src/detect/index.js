@@ -117,7 +117,9 @@ async function runDetect(url) {
     }
   }
 
-  return finish(url, started, { inputKind: "page", engine, meta, sources, rejected, page, shield, pageStatus: first.status });
+  // No stream of its own, but a list of lives (an events calendar…): the viewer picks one.
+  const picks = page && !usable(sources) ? await dropAds(page.picks ?? [], page.finalUrl) : [];
+  return finish(url, started, { inputKind: "page", engine, meta, sources, rejected, page, shield, pageStatus: first.status, picks });
 }
 
 /**
@@ -180,16 +182,19 @@ async function inspectLink(url) {
 const usable = (sources) => sources.some((s) => !s.drm);
 
 /** Builds the response, explains empty results, and caches it. */
-function finish(url, started, { inputKind, engine, meta, sources, rejected, page = null, shield = {}, redirected = null, pageStatus = null }) {
+function finish(url, started, { inputKind, engine, meta, sources, rejected, page = null, shield = {}, redirected = null, pageStatus = null, picks = [] }) {
   const drmFound = sources.some((s) => s.drm) || Boolean(page?.emeKeySystem);
   // DRM sources can neither be played nor saved here, so they aren't listed. Everything else
   // is: sources that can't be saved (live, WebM-only or multi-period DASH…) can still be watched.
   const grouped = groupStreams(sources.filter((s) => !s.drm), { pageTitle: meta?.title });
   const visible = grouped.sources;
   const hidden = sources.filter((s) => !visible.includes(s));
+  const offered = visible.length || drmFound ? [] : picks;
   const { reason, message } = visible.length
     ? explainPartial(visible)
-    : explainEmpty({ hidden, rejected, page, inputKind, drmFound, pageStatus });
+    : offered.length
+      ? { reason: "pick", message: offered.length === 1 ? "This page links to a live. Open it to watch." : `This page lists ${offered.length} lives. Pick one to watch.` }
+      : explainEmpty({ hidden, rejected, page, inputKind, drmFound, pageStatus });
 
   const notes = [];
   const expiring = visible.find((s) => s.expiresAt && s.expiresAt > Date.now());
@@ -225,6 +230,7 @@ function finish(url, started, { inputKind, engine, meta, sources, rejected, page
     drm: !visible.length && drmFound,
     sources: visible.map(publicSource),
     streams: grouped.streams, // one entry per stream on the page, each with its title and sources
+    picks: offered, // a listing page's lives, [{ title, url, image, when }], each detected when picked
     subtitles: (meta?.subtitles ?? []).slice(0, 12).map((s) => ({ ...s, referer: url })),
     reason, // null when something can be downloaded
     message,

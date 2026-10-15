@@ -17,7 +17,7 @@ import {
   Users,
 } from "lucide-react";
 import { useAccount } from "@/features/account/AccountProvider";
-import { apiUrl } from "@/lib/api";
+import { useServerUrl } from "@/lib/server";
 import { auth } from "@/lib/firebase";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { LiveDot } from "@/components/ui/Badge";
@@ -32,7 +32,7 @@ const CHART_GREEN = "#6a9e0e";
  * Live admin dashboard. Opens a stream to /admin/stream (Server-Sent Events over fetch, so the
  * sign-in token stays in a header) and re-renders on every update (~3s). Reconnects on drops.
  */
-function useAdminStream(enabled) {
+function useAdminStream(enabled, apiUrl) {
   const [snap, setSnap] = useState(null);
   const [status, setStatus] = useState("connecting"); // connecting | live | error
   const [error, setError] = useState("");
@@ -86,15 +86,16 @@ function useAdminStream(enabled) {
       controller?.abort();
       clearTimeout(retry);
     };
-  }, [enabled]);
+  }, [enabled, apiUrl]);
 
   return { snap, status, error };
 }
 
 export function AdminPage() {
   const { admin, loaded } = useAccount();
+  const apiUrl = useServerUrl();
   // The Live server is optional: the games section works without it, and this section fills in when it is connected.
-  const { snap, status, error } = useAdminStream(admin && Boolean(apiUrl));
+  const { snap, status, error } = useAdminStream(admin && Boolean(apiUrl), apiUrl);
   const [now, setNow] = useState(Date.now());
   const [waited, setWaited] = useState(false);
   useEffect(() => {

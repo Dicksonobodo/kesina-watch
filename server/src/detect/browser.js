@@ -240,11 +240,18 @@ export function browserDetect(url, { forcePlay = false } = {}) {
     }
 
     const signals = await pageSignals(page);
+    const html = await page.content().catch(() => "");
+    const title = await page.title().catch(() => "");
+    const finalUrl = page.url();
+    // No stream here, but the page may list several lives (an events calendar, a schedule):
+    // collect each one's name and link so the viewer can pick one. Read last: it clicks.
+    const picks = candidates.size ? [] : await findPicks(page);
     return {
-      html: await page.content().catch(() => ""),
-      title: await page.title().catch(() => ""),
-      finalUrl: page.url(),
+      html,
+      title,
+      finalUrl,
       candidates: [...candidates.values()],
+      picks,
       failed,
       ...signals,
       ...stats,
@@ -303,6 +310,159 @@ async function switchChannels(page, candidates, setActive) {
     }
     return; // one group of channel buttons is enough
   }
+}
+
+const PICK_BUDGET_MS = 10_000;
+const MAX_PICKS = 24;
+
+/*
+ * Runs inside the page. Finds the lives a listing page offers, one per item: event calendar
+ * widgets (an "event name" element, or a schema.org Event in JSON-LD, per item) and, failing
+ * that, plain links to live video sites. Each item gives its name, link, picture and time.
+ * Items whose link only appears on click get their button marked [data-dw-pick] instead.
+ */
+function collectPicks() {
+  const clean = (t) => (t || "").replace(/\s+/g, " ").trim();
+  const here = location.href.split("#")[0];
+  const abs = (h) => {
+    try {
+      const u = new URL(h, location.href);
+      return /^https?:$/.test(u.protocol) && u.href.split("#")[0] !== here ? u.href : null;
+    } catch {
+      return null;
+    }
+  };
+  const cls = (el) => (el.getAttribute("class") || "") + " " + (el.parentElement?.getAttribute("class") || "");
+  const WATCHY = /watch|live|join|stream|tune in/i;
+
+  const events = (script) => {
+    try {
+      const data = JSON.parse(script.textContent);
+      return [data].flat().flatMap((d) => d?.["@graph"] ?? [d]).filter((d) => /Event/.test([d?.["@type"]].flat().join(" ")));
+    } catch {
+      return [];
+    }
+  };
+  const ldUrl = (e) => [e.location, e.offers].flat().map((x) => x?.url).find(Boolean) || e.url;
+  const ldImage = (e) => [e.image].flat().map((x) => (typeof x === "string" ? x : x?.url)).find(Boolean);
+
+  // One marker per item; each item is the largest box around its marker that holds no other.
+  let markers = [...document.querySelectorAll("[aria-label='event name' i], [class*='event' i][class*='name' i], [class*='event' i][class*='title' i]")]
+    .filter((el) => el.getClientRects().length && clean(el.textContent).length > 1 && !el.querySelector("[class*='name' i], [class*='title' i]"));
+  if (!markers.length) markers = [...document.querySelectorAll('script[type="application/ld+json"]')].filter((s) => events(s).length);
+  markers = markers.slice(0, 60);
+  const grow = (el) => {
+    let item = el;
+    for (let i = 0; i < 8 && item.parentElement && item.parentElement !== document.body; i++) {
+      if (markers.filter((m) => item.parentElement.contains(m)).length > 1) break;
+      item = item.parentElement;
+    }
+    return item;
+  };
+
+  const picks = [];
+  markers.forEach((marker) => {
+    const item = grow(marker);
+    const ld = [...item.querySelectorAll('script[type="application/ld+json"]')].flatMap(events)[0] ?? {};
+    const links = [...item.querySelectorAll("a[href]")].map((a) => ({ a, href: abs(a.getAttribute("href")) })).filter((x) => x.href);
+    const best = links.find((x) => /button/i.test(cls(x.a)) || WATCHY.test(x.a.textContent)) ?? links[0];
+    let image = item.querySelector("img")?.currentSrc || item.querySelector("img")?.src || ldImage(ld) || null;
+    if (!image) {
+      for (const el of [item, ...item.querySelectorAll("*")].slice(0, 200)) {
+        const m = getComputedStyle(el).backgroundImage.match(/url\(["']?(.+?)["']?\)/);
+        if (m) {
+          image = m[1];
+          break;
+        }
+      }
+    }
+    const title = (marker.tagName === "SCRIPT" ? "" : clean(marker.textContent)) || clean(ld.name);
+    const pick = {
+      title: title.slice(0, 100),
+      url: best?.href || abs(ldUrl(ld) || "") || null,
+      image: image && abs(image),
+      when: clean(item.querySelector("time, [class*='date' i], [class*='time' i]")?.textContent).slice(0, 80) || ld.startDate || null,
+      clickable: null,
+    };
+    if (!pick.url) {
+      const button = ["a", "button", "[role='button']", "[class*='button' i]"].map((s) => item.querySelector(s)).find(Boolean) || item;
+      button.setAttribute("data-dw-pick", String(picks.length));
+      pick.clickable = picks.length;
+    }
+    if (pick.title) picks.push(pick);
+  });
+  if (picks.length) return picks;
+
+  // No event list: plain links to live videos (YouTube/Facebook/Twitch lives, .m3u8 streams…).
+  const LIVE_LINK = /youtube\.com\/(watch|live\/)|youtu\.be\/|facebook\.com\/.+\/(videos|live)|fb\.watch\/|twitch\.tv\/[^/?#]+\/?$|vimeo\.com\/(event\/)?\d+|kick\.com\/[^/?#]+\/?$|\.m3u8(\?|$)/i;
+  return [...document.querySelectorAll("a[href]")]
+    .map((a) => ({ a, url: abs(a.getAttribute("href")) }))
+    .filter((x) => x.url && LIVE_LINK.test(x.url))
+    .map(({ a, url }) => ({
+      title: clean(a.getAttribute("title") || a.getAttribute("aria-label") || a.textContent).slice(0, 100) || new URL(url).hostname.replace(/^www\./, ""),
+      url,
+      image: a.querySelector("img")?.currentSrc || null,
+      when: null,
+      clickable: null,
+    }));
+}
+
+/**
+ * Clicks a marked item button and reports the link it leads to: an address it opens in a new
+ * window, a link it follows (both stopped, not followed), or the main link of a details pop-up.
+ */
+function linkBehindClick(n) {
+  const el = document.querySelector(`[data-dw-pick="${n}"]`);
+  if (!el) return null;
+  const here = location.href.split("#")[0];
+  const shown = () => [...document.querySelectorAll("a[href]")].filter((a) => a.getClientRects().length && /^https?:/.test(a.href) && a.href.split("#")[0] !== here);
+  const before = new Set(shown());
+  let found = null;
+  const realOpen = window.open;
+  window.open = (u) => {
+    if (u) found = new URL(String(u), location.href).href;
+    return null;
+  };
+  const stop = (e) => {
+    const a = e.target.closest?.("a[href]");
+    if (a && /^https?:/.test(a.href) && a.href.split("#")[0] !== here) {
+      found = a.href;
+      e.preventDefault();
+    }
+  };
+  document.addEventListener("click", stop, true);
+  el.click();
+  return new Promise((resolve) => setTimeout(resolve, 900)).then(() => {
+    document.removeEventListener("click", stop, true);
+    window.open = realOpen;
+    if (!found) {
+      const fresh = shown().filter((a) => !before.has(a));
+      found = (fresh.find((a) => /button/i.test(a.getAttribute("class") || "") || /watch|live|join|stream/i.test(a.textContent)) ?? fresh[0])?.href ?? null;
+    }
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    return found;
+  });
+}
+
+/** The lives a listing page links to: [{ title, url, image, when }]. */
+async function findPicks(page) {
+  const deadline = Date.now() + PICK_BUDGET_MS;
+  const startUrl = page.url();
+  const picks = [];
+  for (const frame of page.frames()) {
+    const found = await frame.evaluate(collectPicks).catch(() => []);
+    for (const p of found) {
+      if (!p.url && p.clickable !== null && Date.now() < deadline && page.url() === startUrl) {
+        p.url = await frame.evaluate(linkBehindClick, p.clickable).catch(() => null);
+        // A button that navigated the whole tab: where it went is the link.
+        if (!p.url && page.url() !== startUrl) p.url = page.url();
+      }
+      if (p.url) picks.push({ title: p.title, url: p.url, image: p.image || null, when: p.when || null });
+    }
+    if (picks.length >= MAX_PICKS) break;
+  }
+  const seen = new Set();
+  return picks.filter((p) => !seen.has(p.url) && seen.add(p.url)).slice(0, MAX_PICKS);
 }
 
 /**

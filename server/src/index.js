@@ -147,7 +147,12 @@ app.use((err, req, res, _next) => {
   });
 });
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, (err) => {
+  // Express 5 calls this with an error too (for example, the port is already taken).
+  if (err) {
+    log.error(err.code === "EADDRINUSE" ? `port ${config.port} is already in use: is another copy of the server running?` : "server could not start", { error: err });
+    process.exit(1);
+  }
   log.info("server started", {
     port: config.port,
     chrome: findChrome() || "NOT FOUND (set CHROME_PATH)",

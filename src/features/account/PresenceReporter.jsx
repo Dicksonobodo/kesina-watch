@@ -1,7 +1,8 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { api, isDemoApi } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useServerUrl } from "@/lib/server";
 import { deviceName } from "@/lib/userData";
 
 /*
@@ -30,7 +31,8 @@ export function PresenceReporter() {
   const state = useRef({});
   state.current = { page: pathname, watching: nowWatching, device: deviceName() };
 
-  const enabled = Boolean(user && !isPreview && !isDemoApi);
+  const server = useServerUrl();
+  const enabled = Boolean(user && !isPreview && server);
 
   // Immediately when what the user is doing changes…
   useEffect(() => {

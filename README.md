@@ -170,16 +170,14 @@ Sports works as soon as the website is deployed. Live needs the detection server
 
 ### Detection server (Live only; can't run on Vercel: it needs Chrome and long-running streams)
 
-**Free test from your PC:**
+**From your laptop (free, no account, no redeploys):** double-click **`Start Live server.cmd`** (or `cd server && npm run live`) and leave the window open. It:
 
-```bash
-npm run server                                        # terminal 1
-npx cloudflared tunnel --url http://localhost:8787    # terminal 2 → prints https://<random>.trycloudflare.com
-```
+1. starts the server on port 8787,
+2. opens a free Cloudflare tunnel to it (`server/bin/cloudflared.exe`, a single program, not installed; not in git), which gives an https address like `https://word-word-word.trycloudflare.com`,
+3. saves that address in Firestore (`config/server`, using `FIREBASE_SERVICE_ACCOUNT` from `.env`) and refreshes it every minute. The website asks `/api/games?what=server` for it (`src/lib/server.js`), so a new address each start needs no rebuild. An address not refreshed for 2½ minutes counts as offline, and Ctrl+C clears it, so visitors see "Live is offline right now" instead of a broken page,
+4. allows the live site (`https://dixon-watch.vercel.app` and its previews) on top of `ALLOWED_ORIGINS` in `server/.env`.
 
-Use that https address as `VITE_API_URL` in Vercel (redeploy after changing it), and allow the site in `server/.env`:
-`ALLOWED_ORIGINS=https://<project>.vercel.app,https://<project>-*.vercel.app,http://localhost:5173`.
-The tunnel address changes every time it starts, and your PC must stay on.
+The laptop has to stay on, awake and online while people watch (set Windows not to sleep when plugged in). If the tunnel drops it opens a new one and publishes the new address by itself. On this computer, a `VITE_API_URL` of `http://localhost:8787` is used directly; on the web a localhost address is ignored.
 
 **For real users (24/7):** a small VPS with [deploy/README.md](deploy/README.md).
 
