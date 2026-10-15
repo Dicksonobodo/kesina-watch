@@ -55,7 +55,7 @@ export function lerpPose(a, b, t) {
 }
 
 // The shooter, seen from behind. "Plant" is the moment before the strike (frozen while you aim).
-export const SHOOTER_SPOT = { start: [-1.55, -1.95], plant: [-0.38, -0.42] };
+export const SHOOTER_SPOT = { start: [-0.95, -1.75], plant: [-0.38, -0.42] }; // the start is also where he waits
 export const STAND = {
   hipL: [-0.1, 0.92, 0], hipR: [0.1, 0.92, 0], kneeL: [-0.11, 0.5, 0.03], kneeR: [0.11, 0.5, 0.03], footL: [-0.13, 0.04, 0], footR: [0.13, 0.04, 0],
   shL: [-0.21, 1.42, 0], shR: [0.21, 1.42, 0], elL: [-0.27, 1.16, 0], elR: [0.27, 1.16, 0], handL: [-0.29, 0.92, 0.03], handR: [0.29, 0.92, 0.03], neck: [0, 1.5, 0], head: [0, 1.63, 0],
@@ -166,3 +166,15 @@ export function kickInfo(order, i) {
   const round = Math.floor(i / 2);
   return { i, round, shooter: order[i % 2], keeper: order[(i + 1) % 2], yards: yardsFor(round), sudden: round >= REGULATION };
 }
+
+/* ---------- after the kick ---------- */
+
+// Arms up (a goal) and hands on head (a miss or a save), seen from behind, at the plant spot.
+export const CELEBRATE = {
+  hipL: [-0.1, 0.92, 0.1], hipR: [0.1, 0.92, 0.1], kneeL: [-0.14, 0.5, 0.14], kneeR: [0.14, 0.5, 0.06], footL: [-0.17, 0.04, 0.1], footR: [0.17, 0.04, 0.02],
+  shL: [-0.22, 1.43, 0.12], shR: [0.22, 1.43, 0.12], elL: [-0.4, 1.72, 0.14], elR: [0.4, 1.72, 0.14], handL: [-0.5, 2.02, 0.16], handR: [0.5, 2.02, 0.16], neck: [0, 1.51, 0.13], head: [0, 1.65, 0.15],
+};
+export const DESPAIR = {
+  ...CELEBRATE, elL: [-0.36, 1.6, 0.2], elR: [0.36, 1.6, 0.2], handL: [-0.1, 1.74, 0.2], handR: [0.1, 1.74, 0.2], neck: [0, 1.49, 0.16], head: [0, 1.6, 0.2],
+};
+export { JOINTS };

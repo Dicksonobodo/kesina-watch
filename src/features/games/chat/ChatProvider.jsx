@@ -219,6 +219,13 @@ export function ChatProvider({ children }) {
     setThread((t) => ({ ...t, blocked }));
   }, [peer]);
 
+  /** Clears the open conversation for you (they keep theirs). */
+  const clear = useCallback(async () => {
+    if (!chatRef.current) return;
+    await gamesApi("chat.clear", { chat: chatRef.current });
+    setThread((t) => ({ ...t, messages: [] }));
+  }, []);
+
   const report = useCallback(async (reason) => {
     if (!chatRef.current) return;
     await gamesApi("chat.report", { chat: chatRef.current, reason });
@@ -251,8 +258,8 @@ export function ChatProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ open, view, inbox, unread, peer, thread, gameId, setGameId, pendingInvite, setPendingInvite, error, setError, openPanel, closePanel, showList, openThread, send, react, unsend, editMessage, setTyping, block, report, startGame, backToChat, shareInvite, me: meUid }),
-    [open, view, inbox, unread, peer, thread, gameId, pendingInvite, error, openPanel, closePanel, showList, openThread, send, react, unsend, editMessage, setTyping, block, report, startGame, backToChat, shareInvite, meUid],
+    () => ({ open, view, inbox, unread, peer, thread, gameId, setGameId, pendingInvite, setPendingInvite, error, setError, openPanel, closePanel, showList, openThread, send, react, unsend, editMessage, setTyping, block, clear, report, startGame, backToChat, shareInvite, me: meUid }),
+    [open, view, inbox, unread, peer, thread, gameId, pendingInvite, error, openPanel, closePanel, showList, openThread, send, react, unsend, editMessage, setTyping, block, clear, report, startGame, backToChat, shareInvite, meUid],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

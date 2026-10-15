@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowLeft, Ban, Check, ChevronDown, Copy, Crown, Equal, Flag, MessageCircle, Pencil, MoreHorizontal, Plus, Search, Send, SquarePen, Swords, Undo2, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, ChevronDown, Copy, Crown, Equal, Flag, MessageCircle, Pencil, MoreHorizontal, Plus, Search, Send, SquarePen, Swords, Trash2, Undo2, X } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { gamesApi } from "@/lib/games";
 import { cn } from "@/lib/cn";
@@ -211,7 +211,7 @@ function ChatList() {
 /* ---------- one conversation ---------- */
 
 function Thread() {
-  const { peer, thread, showList, closePanel, send, me, error, setError, setTyping, block, report, startGame, editMessage } = useChat();
+  const { peer, thread, showList, closePanel, send, me, error, setError, setTyping, block, clear, report, startGame, editMessage } = useChat();
   const [held, setHeld] = useState(null); // the message whose menu is open (press and hold)
   const [editing, setEditing] = useState(null); // the message being edited
   const input = useRef(null);
@@ -364,6 +364,16 @@ function Thread() {
             className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm transition hover:bg-white/[.07]"
           >
             <Flag className="size-4 text-mist-300" /> Report
+          </button>
+          <button
+            onClick={async () => {
+              setMenu(null);
+              if (!window.confirm(`Clear this chat? The messages are removed for you only. ${peer?.name ?? "They"} will still have them.`)) return;
+              await clear().catch((e) => setError(e.message));
+            }}
+            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-live transition hover:bg-white/[.07]"
+          >
+            <Trash2 className="size-4" /> Clear chat
           </button>
         </div>
       )}

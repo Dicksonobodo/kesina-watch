@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
+import { useScrollLock } from "../chat/useScrollLock";
 import { Button } from "@/components/ui/Button";
 import { gamesApi } from "@/lib/games";
 import { kickInfo } from "./geometry";
@@ -15,6 +16,7 @@ import { ShootoutMatch } from "./ShootoutMatch";
 export function ShootoutRoom({ room, myId, now, skew, apply }) {
   const navigate = useNavigate();
   const [problem, setProblem] = useState("");
+  useScrollLock(true);
   const so = room.so;
   const k = room.idx;
   const done = room.status === "done";
@@ -44,9 +46,25 @@ export function ShootoutRoom({ room, myId, now, skew, apply }) {
   };
 
   return (
-    <div className="mx-auto max-w-md">
-      <ShootoutMatch key={room.code} view={view} onShoot={(shot) => send({ shot })} onDive={(zone) => send({ zone })}>
-        {done && (
+    <div className="fixed inset-0 z-[115] flex flex-col bg-[#05070d] px-2.5 pt-[max(env(safe-area-inset-top),.5rem)] pb-[max(env(safe-area-inset-bottom),.6rem)]">
+      <div className="mx-auto flex w-full max-w-lg items-center gap-2 pb-2">
+        <button onClick={() => navigate("/games/battle")} aria-label="Leave" className="grid size-9 place-items-center rounded-full bg-white/[.07] text-white/85 transition hover:bg-white/15">
+          <X className="size-5" />
+        </button>
+        <span className="min-w-0 flex-1 text-center">
+          <span className="block truncate font-display text-[15px] leading-tight font-bold">Mind Games: Shootout</span>
+          <span className="block text-[11px] leading-tight text-white/55">Live · vs {view.players.find((p) => p.uid !== myId)?.name ?? "…"}</span>
+        </span>
+        <span className="size-9" />
+      </div>
+      <ShootoutMatch
+        key={room.code}
+        view={view}
+        onShoot={(shot) => send({ shot })}
+        onDive={(zone) => send({ zone })}
+        className="mx-auto max-w-lg flex-1"
+        final={
+          done && (
           <div className="flex flex-col gap-2">
             {room.forfeit && <p className="text-center text-sm text-mist-500">{room.forfeit === myId ? "You stopped playing, so the shootout was given to your opponent." : "Your opponent stopped playing, so the shootout is yours."}</p>}
             <p className="text-center text-xs text-mist-500">XP and coins have been added to your profile.</p>
@@ -76,8 +94,9 @@ export function ShootoutRoom({ room, myId, now, skew, apply }) {
             </div>
             {problem && <p className="text-center text-xs text-live">{problem}</p>}
           </div>
-        )}
-      </ShootoutMatch>
+          )
+        }
+      />
     </div>
   );
 }

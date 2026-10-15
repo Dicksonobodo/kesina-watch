@@ -48,7 +48,7 @@ export default function ShootoutChat({ game, move, busy, error }) {
 
   const view = { ...game, locked: null, clock: null };
   return (
-    <div className="px-3 py-3">
+    <div className="h-full px-2 pt-1 pb-2">
       <ShootoutMatch
         view={view}
         seenKey={`dw-so-seen-${game.id}`}

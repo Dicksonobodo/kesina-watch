@@ -106,7 +106,7 @@ async function requireChat(store, identity, chatId) {
 
 async function inboxList(store, uid) {
   const rows = await store.list(`inbox_${uid}`, { orderBy: "lastAt", desc: true, limit: 40 });
-  return rows.map((r) => ({ chat: r.id, peer: r.peer, last: r.last, lastAt: r.lastAt, unread: r.unread ?? 0 }));
+  return rows.map((r) => ({ chat: r.id, peer: r.peer, last: r.clearedAt && r.clearedAt >= (r.lastAt ?? 0) ? { from: null, text: "" } : r.last, lastAt: r.lastAt, unread: r.unread ?? 0 }));
 }
 
 /** Marks everything in a conversation as read (for me) and tells the other person. */
@@ -137,7 +137,7 @@ export async function openChat(identity, peerUid) {
   return {
     chat: chatId,
     peer: person(peerDoc),
-    messages: messages.reverse().map(view),
+    messages: messages.reverse().filter((m) => m.at > (chat?.clearedAt?.[identity.uid] ?? 0)).map(view),
     since: upd,
     readAt: chat?.readAt?.[peerUid] ?? 0,
     blocked: Boolean(mine.blocked?.[peerUid]),
@@ -162,7 +162,7 @@ export async function syncChat(identity, { v = -1, chat: chatId = null, since = 
         const rows = await store.list(`chatmsg_${chatId}`, { where: [["upd", ">", since]], orderBy: "upd", limit: 100 });
         out.thread = {
           chat: chatId,
-          messages: rows.map(view),
+          messages: rows.filter((m) => m.at > (chat.clearedAt?.[identity.uid] ?? 0)).map(view),
           readAt: chat.readAt?.[peerUid] ?? 0,
           typing: Date.now() - (chat.typing?.[peerUid] ?? 0) < TYPING_MS,
         };
@@ -325,6 +325,20 @@ export async function editMessage(identity, chatId, msgId, text) {
     ]);
   }
   return { message: view({ ...m, text: value, edited: true, upd }) };
+}
+
+/** Clears a conversation for you (like WhatsApp's "Clear chat"): the other person still has it. */
+export async function clearChat(identity, chatId) {
+  rateLimit(`chatclear:${identity.uid}`, 20);
+  const store = await getStore();
+  await requireChat(store, identity, chatId);
+  const at = stamp();
+  await Promise.all([
+    store.set(`chats/${chatId}`, { [`clearedAt.${identity.uid}`]: at }, { merge: true }),
+    store.set(`inbox_${identity.uid}/${chatId}`, { clearedAt: at }, { merge: true }),
+    store.set(`chatmeta/${identity.uid}`, { v: inc(1) }, { merge: true }),
+  ]);
+  return { ok: true, clearedAt: at };
 }
 
 export async function blockPerson(identity, peerUid, blocked) {

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Bot, MessageCircle, RotateCcw, Swords, Users } from "lucide-react";
+import { ArrowLeft, Bot, Coins, MessageCircle, RotateCcw, Sparkles, Swords, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { gamesApi } from "@/lib/games";
 import { useChat } from "./chat/ChatProvider";
 import { useGames } from "./GamesProvider";
 import { GameArt } from "./art";
-import { Card, ErrorNote, Eyebrow, RewardCard } from "./ui";
+import { Card, ErrorNote, Eyebrow } from "./ui";
+import { useScrollLock } from "./chat/useScrollLock";
 import { ShootoutMatch } from "./shootout/ShootoutMatch";
 import { squadPayload, SquadPicker, useSavedSquad } from "./shootout/SquadPicker";
 
@@ -30,6 +31,7 @@ export function Shootout() {
   const [reward, setReward] = useState(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
+  useScrollLock(Boolean(match));
 
   async function start() {
     setStarting(true);
@@ -63,19 +65,28 @@ export function Shootout() {
       myDive: null,
       clock: null,
     };
+    // The match takes the whole screen, like a game: nothing to scroll.
     return (
-      <div className="mx-auto max-w-md">
-        <button onClick={() => setMatch(null)} className="mb-4 inline-flex items-center gap-2 text-sm text-mist-500 transition hover:text-mist-100">
-          <ArrowLeft className="size-4" /> Shootout
-        </button>
-        <ShootoutMatch key={match.session} view={view} onShoot={(shot) => play({ shot })} onDive={(zone) => play({ dive: zone })}>
-          {match.status === "done" && (
-            <ResultActions reward={reward} onAgain={start} starting={starting} onSquad={() => setMatch(null)} />
-          )}
-        </ShootoutMatch>
-        <div className="mt-3">
-          <ErrorNote>{error}</ErrorNote>
+      <div className="fixed inset-0 z-[115] flex flex-col bg-[#05070d] px-2.5 pt-[max(env(safe-area-inset-top),.5rem)] pb-[max(env(safe-area-inset-bottom),.6rem)]">
+        <div className="mx-auto flex w-full max-w-lg items-center gap-2 pb-2">
+          <button onClick={() => setMatch(null)} aria-label="Leave the shootout" className="grid size-9 place-items-center rounded-full bg-white/[.07] text-white/85 transition hover:bg-white/15">
+            <X className="size-5" />
+          </button>
+          <span className="min-w-0 flex-1 text-center">
+            <span className="block truncate font-display text-[15px] leading-tight font-bold">Mind Games: Shootout</span>
+            <span className="block text-[11px] leading-tight text-white/55">vs the computer</span>
+          </span>
+          <span className="size-9" />
         </div>
+        <ShootoutMatch
+          key={match.session}
+          view={view}
+          onShoot={(shot) => play({ shot })}
+          onDive={(zone) => play({ dive: zone })}
+          className="mx-auto max-w-lg flex-1"
+          final={<ResultActions reward={reward} onAgain={start} starting={starting} onSquad={() => setMatch(null)} />}
+        />
+        {error && <p className="mt-2 text-center text-xs text-live">{error}</p>}
       </div>
     );
   }
@@ -138,7 +149,17 @@ export function Shootout() {
 function ResultActions({ reward, onAgain, starting, onSquad }) {
   return (
     <div className="flex flex-col gap-3">
-      {reward && <RewardCard reward={reward} />}
+      {reward && (
+        <div className="flex items-center justify-center gap-4 rounded-2xl bg-black/60 px-4 py-2.5 text-sm font-bold ring-1 ring-signal/30">
+          <span className="flex items-center gap-1.5 text-signal">
+            <Sparkles className="size-4" /> +{reward.gainedXp} XP
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Coins className="size-4 text-signal" /> +{reward.gainedCoins} coins
+          </span>
+          {reward.chest && <span className="text-xs font-semibold text-white/70">+ daily chest 🎁</span>}
+        </div>
+      )}
       <div className="flex gap-2">
         <Button className="flex-1" onClick={onAgain} loading={starting}>
           <RotateCcw className="size-4" /> Play again
