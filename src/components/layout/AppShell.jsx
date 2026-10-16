@@ -35,7 +35,8 @@ export function AppShell() {
   const game = useGameIdentity(Boolean(user));
 
   return (
-    <div className="relative min-h-dvh lg:pl-72">
+    <div className="relative min-h-dvh overflow-x-clip lg:pl-72">
+      {/* overflow-x-clip: decorative glows past the edge mustn't widen the page on phones */}
       <Ambient />
 
       {/* Desktop sidebar */}
