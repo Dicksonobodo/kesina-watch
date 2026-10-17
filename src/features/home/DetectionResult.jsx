@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Clock, ExternalLink, ListVideo, Globe, Info, Lock, Pin, PinOff, Play, RotateCcw, SearchX, ShieldCheck } from "lucide-react";
 import { formatBytes } from "@/lib/format";
@@ -6,31 +6,47 @@ import { Badge, LiveDot } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Poster } from "@/components/ui/Poster";
 import { cn } from "@/lib/cn";
-import { Player } from "@/features/player/Player";
+import { sourcesOf as sourcesOfStream, streamsOf, useLiveSession } from "@/features/live/LiveSession";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { pinSite } from "@/features/sites/SitesPage";
 import { idFromUrl, removeItem, useUserCollection } from "@/lib/userData";
 
 const ease = [0.22, 1, 0.36, 1];
 
-export function DetectionResult({ result, onReset, autoplay = null, liveOnly = false }) {
+export function DetectionResult({ result, onReset, autoplay = null, onAutoplayed, liveOnly = false }) {
   // A page can carry several streams (channels, cameras, feeds): each has its own title and qualities.
-  const streamList = useMemo(() => {
-    const list = result.streams?.length ? result.streams : [{ id: null, title: result.title, live: result.live }];
-    return liveOnly ? list.filter((st) => st.live) : list;
-  }, [result, liveOnly]);
-  const sourcesOf = (st) => result.sources.filter((s) => (s.streamId ?? null) === (st.id ?? null) && (!liveOnly || s.live));
-  const [streamId, setStreamId] = useState(streamList[0]?.id ?? null);
+  const streamList = useMemo(() => streamsOf(result, liveOnly), [result, liveOnly]);
+  const sourcesOf = (st) => sourcesOfStream(result, st, liveOnly);
+  // The player lives in the app frame, so it keeps playing (in the mini player) on other pages.
+  const session = useLiveSession();
+  const playingHere = session.now?.result.url === result.url ? session.now : null;
+  const [streamId, setStreamId] = useState(playingHere?.streamId ?? streamList[0]?.id ?? null);
   const current = streamList.find((st) => st.id === streamId) ?? streamList[0];
   const sources = current ? sourcesOf(current) : [];
-  const [selected, setSelected] = useState(sources[0]?.id);
+  const [selected, setSelected] = useState(playingHere?.sourceId ?? sources[0]?.id);
   const [note, setNote] = useState("");
   const [a, b] = result.palette ?? ["#c6ff3d", "#0f7b5f"];
   const source = sources.find((s) => s.id === selected) ?? sources[0];
   const hasSources = sources.length > 0;
   const multi = streamList.length > 1;
-  // Arriving from a play link opens the player straight away.
-  const [watching, setWatching] = useState(() => Boolean(autoplay && !result.demo && result.sources.length));
+
+  const startPlayer = (st, sourceId, resumeAt = 0) => session.play({ result, liveOnly, streamId: st?.id ?? null, sourceId, resumeAt });
+
+  // Arriving from a play link opens the player straight away (once: not again on coming back).
+  useEffect(() => {
+    if (!autoplay || result.demo || !result.sources.length) return;
+    startPlayer(current, source?.id, autoplay.at);
+    onAutoplayed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoplay]);
+
+  // The stream was switched from the player's own menu: show the same one here.
+  useEffect(() => {
+    if (!playingHere || playingHere.streamId === streamId) return;
+    setStreamId(playingHere.streamId);
+    setSelected(playingHere.sourceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playingHere?.streamId]);
 
   // Picks a stream (and its best quality); `play` starts it, also while the player is open.
   function chooseStream(id, play = false) {
@@ -39,7 +55,7 @@ export function DetectionResult({ result, onReset, autoplay = null, liveOnly = f
     setStreamId(st.id);
     setSelected(sourcesOf(st)[0]?.id);
     setNote("");
-    if (play) setWatching(true);
+    if (play) startPlayer(st, sourcesOf(st)[0]?.id);
   }
   const { user } = useAuth();
   const { items: sites } = useUserCollection(user?.uid, "sites");
@@ -64,7 +80,7 @@ export function DetectionResult({ result, onReset, autoplay = null, liveOnly = f
   function onWatch() {
     if (result.demo) return comingSoon("The clean player");
     setNote("");
-    setWatching(true);
+    startPlayer(current, source?.id);
   }
 
   return (
@@ -265,22 +281,6 @@ export function DetectionResult({ result, onReset, autoplay = null, liveOnly = f
           <RotateCcw className="size-3.5" /> Analyze another link
         </Button>
       </div>
-
-      <AnimatePresence>
-        {watching && source && (
-          <Player
-            key={result.url}
-            result={result}
-            source={source}
-            resumeAt={autoplay?.at}
-            streamTitle={multi || current?.title !== result.title ? current?.title : undefined}
-            streams={multi ? streamList : undefined}
-            activeStreamId={current?.id}
-            onSelectStream={(id) => chooseStream(id)}
-            onClose={() => setWatching(false)}
-          />
-        )}
-      </AnimatePresence>
     </motion.section>
   );
 }

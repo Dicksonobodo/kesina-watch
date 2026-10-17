@@ -6,6 +6,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useAuth, isFirebaseConfigured } from "@/features/auth/AuthProvider";
 import { useShield } from "@/features/shield/ShieldProvider";
 import { PresenceReporter } from "@/features/account/PresenceReporter";
+import { LiveSessionProvider } from "@/features/live/LiveSession";
 import { useAccount } from "@/features/account/AccountProvider";
 import { Logo } from "@/components/ui/Logo";
 import { Avatar } from "@/components/ui/Avatar";
@@ -26,6 +27,15 @@ const NAV = [
 const ADMIN_NAV = { to: "/admin", label: "Admin", icon: Gauge };
 
 export function AppShell() {
+  // Live (the scan, its result and the player) outlives page changes: see LiveSession.
+  return (
+    <LiveSessionProvider>
+      <Shell />
+    </LiveSessionProvider>
+  );
+}
+
+function Shell() {
   const { user } = useAuth();
   const location = useLocation();
   const [syncProblem, setSyncProblem] = useState(null);

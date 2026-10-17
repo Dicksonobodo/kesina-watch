@@ -39,7 +39,29 @@ export async function detect(rawUrl) {
   return work;
 }
 
+// The quick read (one GET, links in the HTML) usually answers in a second or two. When it's
+// still going after this long, the browser pass starts alongside it instead of after it.
+const BROWSER_HEAD_START_MS = 3_000;
+
 async function runDetect(url) {
+  let early = null;
+  const browserPass = () => {
+    if (!early) {
+      early = browserDetect(url);
+      early.catch(() => {}); // awaited below when it's needed; unused otherwise
+    }
+    return early;
+  };
+  // A media link never needs the browser.
+  const timer = classify(url) ? null : setTimeout(browserPass, BROWSER_HEAD_START_MS);
+  try {
+    return await detectWith(url, browserPass);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function detectWith(url, browserPass) {
   const started = Date.now();
   const first = await inspectLink(url);
 
@@ -91,7 +113,7 @@ async function runDetect(url) {
 
   if (!usable(sources)) {
     engine = "browser";
-    page = await browserDetect(url);
+    page = await browserPass();
     shield = { adsBlocked: page.adsBlocked, popupsBlocked: page.popupsBlocked };
     let pageMeta = extractMetadata(page.html, page.finalUrl);
     meta = mergeMeta(meta, pageMeta, page.title);

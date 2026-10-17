@@ -7,7 +7,7 @@ import { rateLimit } from "./limits.js";
 import { findChrome } from "./chrome.js";
 import { log } from "./log.js";
 import { detect, detectStats } from "./detect/index.js";
-import { closeBrowser } from "./detect/browser.js";
+import { closeBrowser, warmBrowser } from "./detect/browser.js";
 import { getBlocker } from "./detect/blocker.js";
 import { relayHandler, relayMirrorHandler, relayStats, signRelayToken } from "./relay.js";
 import { clientLogHandler } from "./clientLog.js";
@@ -164,6 +164,10 @@ const server = app.listen(config.port, (err) => {
   getBlocker()
     .then(() => log.info("ad-block lists ready"))
     .catch((err) => log.warn("ad-block lists failed to load", { error: err }));
+  // …and start Chrome now rather than on the first page that needs it.
+  warmBrowser()
+    .then(() => log.info("headless Chrome ready"))
+    .catch((err) => log.warn("headless Chrome failed to start", { error: err }));
 });
 server.requestTimeout = 0; // long relay streams and the admin stream are fine; per-route timeouts handle the rest
 server.keepAliveTimeout = 65_000;

@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  ArrowLeft,
   Captions,
   Check,
+  ChevronDown,
   ExternalLink,
   Gauge,
   ListVideo,
   Maximize,
+  Maximize2,
   Minimize,
   Pause,
   PictureInPicture2,
@@ -20,6 +21,7 @@ import {
   Volume1,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { LiveDot } from "@/components/ui/Badge";
@@ -32,11 +34,32 @@ import { loadSubtitle } from "./subtitles";
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const HIDE_AFTER_MS = 2800;
 const SEEK_STEP = 10;
-/** Full-screen, ad-free cinema player for a detected live stream. */
-export function Player({ result, source: initialSource, resumeAt: resumeFrom, onClose, streamTitle, streams, activeStreamId, onSelectStream }) {
+const ease = [0.22, 1, 0.36, 1];
+// Phones and tablets: turning sideways means "watch full screen".
+const touchLandscape = () => window.matchMedia("(orientation: landscape) and (pointer: coarse)");
+
+/**
+ * Full-screen, ad-free cinema player for a detected live stream. `mini` shrinks the same player
+ * (same video, no reload) to a small card at the top of the screen, so the live keeps playing
+ * while the viewer uses the rest of the app.
+ */
+export function Player({
+  result,
+  source: initialSource,
+  resumeAt: resumeFrom,
+  onClose,
+  streamTitle,
+  streams,
+  activeStreamId,
+  onSelectStream,
+  mini = false,
+  onMinimize,
+  onExpand,
+}) {
   const videoRef = useRef(null);
   const shellRef = useRef(null);
   const engineRef = useRef(null);
+  const rotatedIn = useRef(false); // full screen was entered by turning the phone
   const resumeAt = useRef(resumeFrom || 0);
   const hideTimer = useRef(null);
   const lastTap = useRef({ t: 0, side: null });
@@ -238,10 +261,41 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
 
   const toggleFullscreen = useCallback(() => {
     const v = videoRef.current;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (shellRef.current.requestFullscreen) shellRef.current.requestFullscreen().catch(() => {});
-    else v.webkitEnterFullscreen?.(); // iPhone
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else if (shellRef.current.requestFullscreen) {
+      shellRef.current
+        .requestFullscreen({ navigationUI: "hide" })
+        // On a phone held upright, turn the picture sideways too (Android; ignored elsewhere).
+        .then(() => window.matchMedia("(pointer: coarse)").matches && screen.orientation?.lock?.("landscape").catch(() => {}))
+        .catch(() => {});
+    } else v.webkitEnterFullscreen?.(); // iPhone
   }, []);
+
+  /* ---------- turn the phone sideways: full screen; upright again: back ---------- */
+  useEffect(() => {
+    if (mini) return;
+    const mq = touchLandscape();
+    const onTurn = () => {
+      if (mq.matches && !document.fullscreenElement) {
+        // Browsers may refuse full screen without a tap; the player already fills the screen then.
+        shellRef.current
+          ?.requestFullscreen?.({ navigationUI: "hide" })
+          .then(() => (rotatedIn.current = true))
+          .catch(() => {});
+      } else if (!mq.matches && rotatedIn.current && document.fullscreenElement) {
+        rotatedIn.current = false;
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+    mq.addEventListener("change", onTurn);
+    return () => mq.removeEventListener("change", onTurn);
+  }, [mini]);
+
+  // Shrinking to the mini player leaves full screen first.
+  useEffect(() => {
+    if (mini && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (mini) setMenu(null);
+  }, [mini]);
 
   const togglePip = useCallback(async () => {
     const v = videoRef.current;
@@ -280,8 +334,23 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
     setSource((s) => ({ ...s }));
   };
 
-  /* ---------- keyboard, fullscreen, scroll lock ---------- */
+  /* ---------- fullscreen state ---------- */
   useEffect(() => {
+    const onFs = () => {
+      const on = Boolean(document.fullscreenElement);
+      setFullscreen(on);
+      if (!on) {
+        rotatedIn.current = false;
+        screen.orientation?.unlock?.();
+      }
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  /* ---------- keyboard and scroll lock: full-screen player only ---------- */
+  useEffect(() => {
+    if (mini) return;
     const onKey = (e) => {
       if (e.target.closest?.("input, textarea")) return;
       const v = videoRef.current;
@@ -297,7 +366,7 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
         m: () => (v.muted = !v.muted),
         f: toggleFullscreen,
         p: togglePip,
-        Escape: () => !document.fullscreenElement && onClose(),
+        Escape: () => !document.fullscreenElement && minimize(),
       };
       const action = map[e.key];
       if (action) {
@@ -306,21 +375,23 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
         poke();
       }
     };
-    const onFs = () => setFullscreen(Boolean(document.fullscreenElement));
     window.addEventListener("keydown", onKey);
-    document.addEventListener("fullscreenchange", onFs);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.removeEventListener("fullscreenchange", onFs);
       document.body.style.overflow = overflow;
       clearTimeout(hideTimer.current);
     };
-  }, [togglePlay, seekBy, setVol, toggleFullscreen, togglePip, onClose, poke]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mini, togglePlay, seekBy, setVol, toggleFullscreen, togglePip, poke]);
+
+  // Without a mini player to go to (no onMinimize), "minimize" closes.
+  const minimize = () => (onMinimize ? onMinimize() : onClose());
 
   /* ---------- taps: tap = controls, double-tap sides = ±10s (touch) ---------- */
   function onSurfacePointerUp(e) {
+    if (mini) return onExpand?.(); // tap the mini player: back to full screen
     if (menu) return setMenu(null);
     const rect = e.currentTarget.getBoundingClientRect();
     const side = e.clientX - rect.left < rect.width / 3 ? "left" : e.clientX - rect.left > (rect.width * 2) / 3 ? "right" : "center";
@@ -348,16 +419,27 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
   const currentHeight = level.index >= 0 ? levels[level.index]?.height : null;
   const qualityLabel = levels.length > 1 ? (level.auto ? `Auto${currentHeight ? ` · ${currentHeight}p` : ""}` : `${currentHeight}p`) : source.quality;
 
+  const title = streamTitle || result.title;
+
   return createPortal(
     <motion.div
       ref={shellRef}
+      layout
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className={cn("fixed inset-0 z-[110] overflow-hidden bg-black select-none", !controls && playing && "cursor-none")}
-      onPointerMove={(e) => e.pointerType === "mouse" && poke()}
-      role="dialog"
-      aria-label={`Playing ${streamTitle || result.title}`}
+      transition={{ layout: { duration: 0.32, ease } }}
+      className={cn(
+        "overflow-hidden bg-black select-none",
+        mini
+          ? // The mini player: a small card at the top, under the phone's top bar.
+            "fixed top-[calc(3.5rem+env(safe-area-inset-top)+.5rem)] right-3 z-[95] aspect-video w-[min(62vw,320px)] cursor-pointer rounded-2xl shadow-2xl shadow-black/70 ring-1 ring-white/15 lg:top-5 lg:right-5 lg:w-[380px]"
+          : "fixed inset-0 z-[110]",
+        !mini && !controls && playing && "cursor-none",
+      )}
+      onPointerMove={(e) => !mini && e.pointerType === "mouse" && poke()}
+      role={mini ? "region" : "dialog"}
+      aria-label={mini ? `Mini player: ${title}` : `Playing ${title}`}
     >
       {/* Ambient light in the letterbox, from the poster's colours */}
       <div
@@ -371,10 +453,12 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
       {/* Tap / click surface */}
       <div className="absolute inset-0" onPointerUp={onSurfacePointerUp} />
 
+      {mini && <MiniControls title={title} live={live} playing={playing} error={error} onTogglePlay={togglePlay} onExpand={onExpand} onClose={onClose} />}
+
       {/* Centre: buffering, big play, seek feedback */}
       <div className="pointer-events-none absolute inset-0 grid place-items-center">
-        {waiting && !error && <Spinner className="size-12 border-[3px] text-signal" />}
-        {!playing && !waiting && !error && (
+        {waiting && !error && <Spinner className={mini ? "size-7 border-2 text-signal" : "size-12 border-[3px] text-signal"} />}
+        {!mini && !playing && !waiting && !error && (
           <motion.button
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -405,7 +489,7 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
       </div>
 
       {/* Error */}
-      {error && (
+      {error && !mini && (
         <div className="absolute inset-0 grid place-items-center bg-black/70 p-6 backdrop-blur-sm">
           <div className="max-w-sm text-center">
             <p className="font-display text-xl font-bold">Playback stopped</p>
@@ -429,7 +513,7 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
 
       {/* "Resumed at 42:10 · Start over" */}
       <AnimatePresence>
-        {resumedAt && !error && (
+        {resumedAt && !error && !mini && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -454,206 +538,250 @@ export function Player({ result, source: initialSource, resumeAt: resumeFrom, on
       </AnimatePresence>
 
       {/* Top bar */}
-      <motion.div
-        animate={{ opacity: controls ? 1 : 0, y: controls ? 0 : -12 }}
-        transition={{ duration: 0.25 }}
-        className={cn(
-          "absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-black/80 via-black/30 to-transparent px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-16 sm:px-6",
-          !controls && "pointer-events-none",
-        )}
-      >
-        <button onClick={onClose} aria-label="Close player" className="grid size-10 shrink-0 place-items-center rounded-full bg-white/10 backdrop-blur transition hover:bg-white/20">
-          <ArrowLeft className="size-5" />
-        </button>
-        <div className="min-w-0 flex-1 pt-0.5">
-          <p className="flex items-center gap-2 font-display text-[17px] font-bold tracking-tight sm:text-xl">
-            {live && <LiveDot />}
-            <span className="truncate">{streamTitle || result.title}</span>
-          </p>
-          <p className="truncate text-xs text-mist-300">
-            {[streamTitle && streamTitle !== result.title ? result.title : result.year, result.site].filter(Boolean).join(" · ")}
-            {mode === "relay" && " · via Dixon server"}
-          </p>
-        </div>
-        <span className="hidden shrink-0 items-center gap-1.5 rounded-full bg-signal/15 px-3 py-1.5 font-mono text-[11px] font-medium text-signal ring-1 ring-signal/30 backdrop-blur sm:inline-flex">
-          <ShieldCheck className="size-3.5" /> No ads · {result.adsBlocked} blocked
-        </span>
-      </motion.div>
+      {!mini && (
+        <motion.div
+          animate={{ opacity: controls ? 1 : 0, y: controls ? 0 : -12 }}
+          transition={{ duration: 0.25 }}
+          className={cn(
+            "absolute inset-x-0 top-0 flex items-start gap-3 bg-gradient-to-b from-black/80 via-black/30 to-transparent px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-16 sm:px-6",
+            !controls && "pointer-events-none",
+          )}
+        >
+          <button
+            onClick={minimize}
+            aria-label={onMinimize ? "Minimize: keep watching in a small player" : "Close player"}
+            title={onMinimize ? "Minimize (Esc)" : "Close"}
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-white/10 backdrop-blur transition hover:bg-white/20"
+          >
+            <ChevronDown className="size-5" />
+          </button>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <p className="flex items-center gap-2 font-display text-[17px] font-bold tracking-tight sm:text-xl">
+              {live && <LiveDot />}
+              <span className="truncate">{streamTitle || result.title}</span>
+            </p>
+            <p className="truncate text-xs text-mist-300">
+              {[streamTitle && streamTitle !== result.title ? result.title : result.year, result.site].filter(Boolean).join(" · ")}
+              {mode === "relay" && " · via Dixon server"}
+            </p>
+          </div>
+          <span className="hidden shrink-0 items-center gap-1.5 rounded-full bg-signal/15 px-3 py-1.5 font-mono text-[11px] font-medium text-signal ring-1 ring-signal/30 backdrop-blur sm:inline-flex">
+            <ShieldCheck className="size-3.5" /> No ads · {result.adsBlocked} blocked
+          </span>
+          {onMinimize && (
+            <button onClick={onClose} aria-label="Close player" title="Close" className="grid size-10 shrink-0 place-items-center rounded-full bg-white/10 backdrop-blur transition hover:bg-white/20">
+              <X className="size-5" />
+            </button>
+          )}
+        </motion.div>
+      )}
 
       {/* Bottom controls */}
-      <motion.div
-        animate={{ opacity: controls ? 1 : 0, y: controls ? 0 : 12 }}
-        transition={{ duration: 0.25 }}
-        className={cn(
-          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-4 pt-20 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6",
-          !controls && "pointer-events-none",
-        )}
-      >
-        {!live && <Scrubber time={time} duration={duration} buffered={buffered} onSeek={(t) => (videoRef.current.currentTime = t)} />}
-
-        <div className="mt-2 flex items-center gap-1 sm:gap-2">
-          <CtrlButton label={playing ? "Pause (k)" : "Play (k)"} onClick={togglePlay}>
-            {playing ? <Pause className="size-5" fill="currentColor" /> : <Play className="size-5" fill="currentColor" />}
-          </CtrlButton>
-          {!live && (
-            <>
-              <CtrlButton label="Back 10s (j)" onClick={() => seekBy(-SEEK_STEP)}>
-                <RotateCcw className="size-5" />
-              </CtrlButton>
-              <CtrlButton label="Forward 10s (l)" onClick={() => seekBy(SEEK_STEP)}>
-                <RotateCw className="size-5" />
-              </CtrlButton>
-            </>
+      {!mini && (
+        <motion.div
+          animate={{ opacity: controls ? 1 : 0, y: controls ? 0 : 12 }}
+          transition={{ duration: 0.25 }}
+          className={cn(
+            "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-4 pt-20 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6",
+            !controls && "pointer-events-none",
           )}
+        >
+          {!live && <Scrubber time={time} duration={duration} buffered={buffered} onSeek={(t) => (videoRef.current.currentTime = t)} />}
 
-          <VolumeControl volume={muted ? 0 : volume} onChange={setVol} onToggleMute={() => (videoRef.current.muted = !videoRef.current.muted)} />
+          <div className="mt-2 flex items-center gap-1 sm:gap-2">
+            <CtrlButton label={playing ? "Pause (k)" : "Play (k)"} onClick={togglePlay}>
+              {playing ? <Pause className="size-5" fill="currentColor" /> : <Play className="size-5" fill="currentColor" />}
+            </CtrlButton>
+            {!live && (
+              <>
+                <CtrlButton label="Back 10s (j)" onClick={() => seekBy(-SEEK_STEP)}>
+                  <RotateCcw className="size-5" />
+                </CtrlButton>
+                <CtrlButton label="Forward 10s (l)" onClick={() => seekBy(SEEK_STEP)}>
+                  <RotateCw className="size-5" />
+                </CtrlButton>
+              </>
+            )}
 
-          {live ? (
-            <button
-              onClick={goLive}
-              className={cn(
-                "ml-1 inline-flex items-center gap-2 rounded-full px-3 py-1.5 font-mono text-[11px] font-medium tracking-wider uppercase ring-1 transition",
-                atLiveEdge ? "bg-live/15 text-live ring-live/30" : "bg-white/10 text-mist-300 ring-white/15 hover:text-mist-100",
-              )}
-            >
-              {atLiveEdge ? <LiveDot /> : <span className="size-2 rounded-full bg-mist-500" />}
-              {atLiveEdge ? "Live" : "Go live"}
-            </button>
-          ) : (
-            <span className="ml-1 font-mono text-[12px] text-mist-300 tabular-nums">
-              {formatTime(time)} <span className="text-mist-500">/ {formatTime(duration)}</span>
-            </span>
-          )}
+            <VolumeControl volume={muted ? 0 : volume} onChange={setVol} onToggleMute={() => (videoRef.current.muted = !videoRef.current.muted)} />
 
-          <div className="ml-auto flex items-center gap-1 sm:gap-2">
-            {streams?.length > 1 && (
-              <Menu
-                open={menu === "streams"}
-                onToggle={() => setMenu((m) => (m === "streams" ? null : "streams"))}
-                label="Streams on this page"
-                trigger={
-                  <>
-                    <ListVideo className="size-5" />
-                    <span className="hidden font-mono text-[11px] sm:inline">{streams.length} streams</span>
-                  </>
-                }
+            {live ? (
+              <button
+                onClick={goLive}
+                className={cn(
+                  "ml-1 inline-flex items-center gap-2 rounded-full px-3 py-1.5 font-mono text-[11px] font-medium tracking-wider uppercase ring-1 transition",
+                  atLiveEdge ? "bg-live/15 text-live ring-live/30" : "bg-white/10 text-mist-300 ring-white/15 hover:text-mist-100",
+                )}
               >
-                <div className="max-h-[50dvh] min-w-56 overflow-y-auto">
-                  {streams.map((st) => (
-                    <MenuItem
-                      key={st.id}
-                      active={st.id === activeStreamId}
-                      onClick={() => {
-                        setMenu(null);
-                        onSelectStream?.(st.id);
-                      }}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        {st.live && <LiveDot />}
-                        <span className="truncate">{st.title}</span>
-                      </span>
+                {atLiveEdge ? <LiveDot /> : <span className="size-2 rounded-full bg-mist-500" />}
+                {atLiveEdge ? "Live" : "Go live"}
+              </button>
+            ) : (
+              <span className="ml-1 font-mono text-[12px] text-mist-300 tabular-nums">
+                {formatTime(time)} <span className="text-mist-500">/ {formatTime(duration)}</span>
+              </span>
+            )}
+
+            <div className="ml-auto flex items-center gap-1 sm:gap-2">
+              {streams?.length > 1 && (
+                <Menu
+                  open={menu === "streams"}
+                  onToggle={() => setMenu((m) => (m === "streams" ? null : "streams"))}
+                  label="Streams on this page"
+                  trigger={
+                    <>
+                      <ListVideo className="size-5" />
+                      <span className="hidden font-mono text-[11px] sm:inline">{streams.length} streams</span>
+                    </>
+                  }
+                >
+                  <div className="max-h-[50dvh] min-w-56 overflow-y-auto">
+                    {streams.map((st) => (
+                      <MenuItem
+                        key={st.id}
+                        active={st.id === activeStreamId}
+                        onClick={() => {
+                          setMenu(null);
+                          onSelectStream?.(st.id);
+                        }}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          {st.live && <LiveDot />}
+                          <span className="truncate">{st.title}</span>
+                        </span>
+                      </MenuItem>
+                    ))}
+                  </div>
+                </Menu>
+              )}
+
+              {subOptions.length > 0 && (
+                <Menu
+                  open={menu === "subs"}
+                  onToggle={() => setMenu((m) => (m === "subs" ? null : "subs"))}
+                  label="Subtitles"
+                  trigger={
+                    subLoading ? (
+                      <Spinner className="size-4" />
+                    ) : (
+                      <Captions className={cn("size-5", subtitle && "text-signal")} />
+                    )
+                  }
+                >
+                  <MenuItem active={!subtitle} onClick={() => chooseSubtitle(null)}>
+                    Off
+                  </MenuItem>
+                  {subOptions.map((s) => (
+                    <MenuItem key={s.id} active={subtitle === s.id} onClick={() => chooseSubtitle(s.id)}>
+                      {s.label}
                     </MenuItem>
                   ))}
-                </div>
-              </Menu>
-            )}
+                </Menu>
+              )}
 
-            {subOptions.length > 0 && (
-              <Menu
-                open={menu === "subs"}
-                onToggle={() => setMenu((m) => (m === "subs" ? null : "subs"))}
-                label="Subtitles"
-                trigger={
-                  subLoading ? (
-                    <Spinner className="size-4" />
+              {!live && (
+                <Menu
+                  open={menu === "speed"}
+                  onToggle={() => setMenu((m) => (m === "speed" ? null : "speed"))}
+                  label="Playback speed"
+                  trigger={
+                    <>
+                      <Gauge className="size-5" />
+                      <span className="hidden font-mono text-[11px] sm:inline">{rate}×</span>
+                    </>
+                  }
+                >
+                  {SPEEDS.map((s) => (
+                    <MenuItem key={s} active={rate === s} onClick={() => ((videoRef.current.playbackRate = s), setMenu(null))}>
+                      {s === 1 ? "Normal" : `${s}×`}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              )}
+
+              {(levels.length > 1 || fileSources.length > 1) && (
+                <Menu
+                  open={menu === "quality"}
+                  onToggle={() => setMenu((m) => (m === "quality" ? null : "quality"))}
+                  label="Quality"
+                  trigger={
+                    <>
+                      <Settings2 className="size-5" />
+                      <span className="hidden font-mono text-[11px] sm:inline">{qualityLabel}</span>
+                    </>
+                  }
+                >
+                  {levels.length > 1 ? (
+                    <>
+                      <MenuItem active={level.auto} onClick={() => chooseLevel(-1)}>
+                        Auto
+                      </MenuItem>
+                      {[...levels]
+                        .sort((x, y) => y.height - x.height)
+                        .map((l) => (
+                          <MenuItem key={l.index} active={!level.auto && level.index === l.index} onClick={() => chooseLevel(l.index)}>
+                            {l.height}p
+                          </MenuItem>
+                        ))}
+                    </>
                   ) : (
-                    <Captions className={cn("size-5", subtitle && "text-signal")} />
-                  )
-                }
-              >
-                <MenuItem active={!subtitle} onClick={() => chooseSubtitle(null)}>
-                  Off
-                </MenuItem>
-                {subOptions.map((s) => (
-                  <MenuItem key={s.id} active={subtitle === s.id} onClick={() => chooseSubtitle(s.id)}>
-                    {s.label}
-                  </MenuItem>
-                ))}
-              </Menu>
-            )}
+                    fileSources.map((s) => (
+                      <MenuItem key={s.id} active={s.id === source.id} onClick={() => chooseSource(s)}>
+                        {s.quality}
+                      </MenuItem>
+                    ))
+                  )}
+                </Menu>
+              )}
 
-            {!live && (
-              <Menu
-                open={menu === "speed"}
-                onToggle={() => setMenu((m) => (m === "speed" ? null : "speed"))}
-                label="Playback speed"
-                trigger={
-                  <>
-                    <Gauge className="size-5" />
-                    <span className="hidden font-mono text-[11px] sm:inline">{rate}×</span>
-                  </>
-                }
-              >
-                {SPEEDS.map((s) => (
-                  <MenuItem key={s} active={rate === s} onClick={() => ((videoRef.current.playbackRate = s), setMenu(null))}>
-                    {s === 1 ? "Normal" : `${s}×`}
-                  </MenuItem>
-                ))}
-              </Menu>
-            )}
-
-            {(levels.length > 1 || fileSources.length > 1) && (
-              <Menu
-                open={menu === "quality"}
-                onToggle={() => setMenu((m) => (m === "quality" ? null : "quality"))}
-                label="Quality"
-                trigger={
-                  <>
-                    <Settings2 className="size-5" />
-                    <span className="hidden font-mono text-[11px] sm:inline">{qualityLabel}</span>
-                  </>
-                }
-              >
-                {levels.length > 1 ? (
-                  <>
-                    <MenuItem active={level.auto} onClick={() => chooseLevel(-1)}>
-                      Auto
-                    </MenuItem>
-                    {[...levels]
-                      .sort((x, y) => y.height - x.height)
-                      .map((l) => (
-                        <MenuItem key={l.index} active={!level.auto && level.index === l.index} onClick={() => chooseLevel(l.index)}>
-                          {l.height}p
-                        </MenuItem>
-                      ))}
-                  </>
-                ) : (
-                  fileSources.map((s) => (
-                    <MenuItem key={s.id} active={s.id === source.id} onClick={() => chooseSource(s)}>
-                      {s.quality}
-                    </MenuItem>
-                  ))
-                )}
-              </Menu>
-            )}
-
-            {typeof document !== "undefined" && document.pictureInPictureEnabled && (
-              <CtrlButton label="Picture in picture (p)" onClick={togglePip}>
-                <PictureInPicture2 className="size-5" />
+              {typeof document !== "undefined" && document.pictureInPictureEnabled && (
+                <CtrlButton label="Picture in picture (p)" onClick={togglePip}>
+                  <PictureInPicture2 className="size-5" />
+                </CtrlButton>
+              )}
+              <CtrlButton label={fullscreen ? "Exit full screen (f)" : "Full screen (f)"} onClick={toggleFullscreen}>
+                {fullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
               </CtrlButton>
-            )}
-            <CtrlButton label={fullscreen ? "Exit full screen (f)" : "Full screen (f)"} onClick={toggleFullscreen}>
-              {fullscreen ? <Minimize className="size-5" /> : <Maximize className="size-5" />}
-            </CtrlButton>
+            </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
     </motion.div>,
     document.body,
   );
 }
 
 /* ---------- pieces ---------- */
+
+/** On top of the mini player: what's playing, play/pause, back to full screen, close. */
+function MiniControls({ title, live, playing, error, onTogglePlay, onExpand, onClose }) {
+  const tap = (fn) => (e) => {
+    e.stopPropagation();
+    fn?.();
+  };
+  const round = "pointer-events-auto grid size-8 place-items-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-black/75 active:scale-95";
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between bg-gradient-to-b from-black/55 via-transparent to-black/55 p-1.5">
+      <div className="flex items-start justify-between gap-1.5">
+        <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-black/55 px-2 py-1 text-[11px] leading-none font-semibold backdrop-blur">
+          {live && <LiveDot />}
+          <span className="truncate">{error ? "Playback stopped" : title}</span>
+        </span>
+        <button onClick={tap(onClose)} aria-label="Close player" title="Close" className={round}>
+          <X className="size-4" />
+        </button>
+      </div>
+      <div className="flex items-end justify-between">
+        <button onClick={tap(onTogglePlay)} aria-label={playing ? "Pause" : "Play"} className={round}>
+          {playing ? <Pause className="size-3.5" fill="currentColor" /> : <Play className="ml-px size-3.5" fill="currentColor" />}
+        </button>
+        <button onClick={tap(onExpand)} aria-label="Full screen player" title="Back to full screen" className={round}>
+          <Maximize2 className="size-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function CtrlButton({ label, onClick, children }) {
   return (

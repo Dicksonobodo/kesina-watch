@@ -33,6 +33,7 @@ const EME_PROBE = () => {
   };
 };
 
+const SKIPPED_RESOURCES = new Set(["image", "font"]);
 const NAV_TIMEOUT_MS = 25_000;
 const MEDIA_WAIT_MS = 12_000;
 const PLAY_SELECTORS = [
@@ -116,6 +117,9 @@ function withShieldedPage(fn) {
         }
         if (!host) return req.continue(req.continueRequestOverrides(), 0);
         if (isPrivateHostname(host)) return req.abort("accessdenied", 1000);
+        // Pictures and fonts don't help find a stream, and skipping them makes heavy pages load
+        // faster. Players load their streams with XHR/fetch or as media, never as images.
+        if (SKIPPED_RESOURCES.has(req.resourceType())) return req.abort("aborted", 1000);
         req.enqueueInterceptAction(async () => {
           if (await resolvesPrivate(host)) req.abort("accessdenied", 1000);
           else req.continue(req.continueRequestOverrides(), 0);
@@ -267,6 +271,7 @@ const SWITCHER_SELECTOR = [
 ].join(",");
 const SWITCH_BUDGET_MS = 14_000;
 const MAX_SWITCHES = 8;
+const SWITCH_PROBES = 2;
 
 /**
  * Clicks a page's channel buttons one by one (up to a time budget) so that each stream the page
@@ -299,13 +304,17 @@ async function switchChannels(page, candidates, setActive) {
       .catch(() => []);
     if (items.length < 2) continue;
 
+    let found = 0;
     for (let i = 0; i < Math.min(items.length, MAX_SWITCHES); i++) {
       if (Date.now() > deadline) return;
+      // The first clicks brought no new stream: these are ordinary tabs, not channel buttons.
+      if (i === SWITCH_PROBES && !found) return;
       const before = candidates.size;
       setActive(items[i]);
       await frame.evaluate((n) => document.querySelector(`[data-dw-switch="${n}"]`)?.click(), i).catch(() => {});
       await waitForMedia(candidates, 3_000, before + 1);
       setActive(null);
+      if (candidates.size > before) found++;
       if (page.url() !== startUrl) return;
     }
     return; // one group of channel buttons is enough
@@ -601,6 +610,10 @@ async function waitForMedia(candidates, ms, minimum = 1) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export async function warmBrowser() {
+  await getBrowser();
+}
 
 export async function closeBrowser() {
   const b = await browserPromise?.catch(() => null);

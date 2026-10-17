@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { useShield } from "@/features/shield/ShieldProvider";
 import { detectMovie } from "@/lib/api";
 import { isHttpUrl } from "@/lib/format";
@@ -8,8 +8,11 @@ import { isHttpUrl } from "@/lib/format";
  * Paste-a-link → detect → result, shared by Home and Live.
  * Also handles links into the page: ?u=<page>  (detect straight away),
  * &play=1 (open the player when found) and &t=<seconds> (resume position).
+ * linksPath: the page those links are for, when the hook lives above the pages (in the app frame).
+ * autoplayOnFind: every successful scan asks to open the player (once; see clearAutoplay).
  */
-export function useDetector() {
+export function useDetector({ linksPath = null, autoplayOnFind = false } = {}) {
+  const { pathname } = useLocation();
   const { record } = useShield();
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState("idle"); // idle | detecting | done | error
@@ -41,6 +44,7 @@ export function useDetector() {
         const data = await detectMovie(link, { signal: controller.signal });
         setResult(data);
         setStatus("done");
+        if (autoplayOnFind) setAutoplay((a) => a ?? { at: 0 });
         record({ ads: data.adsBlocked, popups: data.popupsBlocked });
       } catch (err) {
         if (err.name === "AbortError") return;
@@ -48,12 +52,12 @@ export function useDetector() {
         setStatus("error");
       }
     },
-    [url, record],
+    [url, record, autoplayOnFind],
   );
 
   // A link into the page (?u=…). Watched by value, so it also works when you're already on the
   // page (a pinned live tapped on Live, say) and not only when the page first opens.
-  const shared = searchParams.get("u");
+  const shared = !linksPath || pathname === linksPath ? searchParams.get("u") : null;
   useEffect(() => {
     if (!shared) return;
     setUrl(shared);
@@ -73,5 +77,8 @@ export function useDetector() {
     inputRef.current?.focus();
   }, []);
 
-  return { url, setUrl, status, setStatus, result, error, detect, reset, inputRef, autoplay };
+  // The player opened for a play link: don't open it again when the page is shown again.
+  const clearAutoplay = useCallback(() => setAutoplay(null), []);
+
+  return { url, setUrl, status, setStatus, result, error, detect, reset, inputRef, autoplay, clearAutoplay };
 }

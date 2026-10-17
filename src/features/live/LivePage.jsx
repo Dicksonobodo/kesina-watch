@@ -7,7 +7,7 @@ import { useUserCollection } from "@/lib/userData";
 import { useServerUrl } from "@/lib/server";
 import { LiveDot } from "@/components/ui/Badge";
 import { LinkBar } from "@/features/home/LinkBar";
-import { useDetector } from "@/features/home/useDetector";
+import { useLiveSession } from "@/features/live/LiveSession";
 import { DetectionProgress } from "@/features/home/DetectionProgress";
 import { DetectionResult } from "@/features/home/DetectionResult";
 import { AddSiteDialog, SiteTile } from "@/features/sites/SitesPage";
@@ -22,13 +22,14 @@ const IDEAS = [
 ];
 
 // A single live stream starts straight away; a page with several waits for the viewer to pick one.
-const multiAutoplay = (result, autoplay) => (result.streams?.filter((s) => s.live).length > 1 ? null : autoplay ?? { at: 0 });
+const multiAutoplay = (result, autoplay) => (result.streams?.filter((s) => s.live).length > 1 ? null : autoplay);
 
 /** Live: paste any live link (page or stream) and watch it ad-free; pinned live channels below. */
 export function LivePage() {
   const { user } = useAuth();
-  const detector = useDetector();
-  const { url, status, result, reset, autoplay } = detector;
+  // Kept in the app frame: the live found here is still here after visiting other pages.
+  const { detector } = useLiveSession();
+  const { url, status, result, reset, autoplay, clearAutoplay } = detector;
   const { items: sites, loading } = useUserCollection(user?.uid, "sites");
   const channels = sites.filter((s) => s.kind === "live");
   const [adding, setAdding] = useState(false);
@@ -74,7 +75,7 @@ export function LivePage() {
 
       <div className="mt-8">
         {status === "detecting" && <DetectionProgress url={url} demo={!server} />}
-        {status === "done" && result && result.live && <DetectionResult key={result.url} result={result} onReset={reset} autoplay={multiAutoplay(result, autoplay)} liveOnly />}
+        {status === "done" && result && result.live && <DetectionResult key={result.url} result={result} onReset={reset} autoplay={multiAutoplay(result, autoplay)} onAutoplayed={clearAutoplay} liveOnly />}
         {status === "done" && result && !result.live && result.picks?.length > 0 && <LivePicks result={result} onPick={watch} onReset={reset} />}
         {status === "done" && result && !result.live && !result.picks?.length && (
           <div className="glass rounded-[28px] p-6 text-center sm:p-8">
